@@ -9,6 +9,9 @@ val encode_int64 : int64 -> string
 val encode_float : float -> string
 val encode_string : string -> string
 val encode_bytes : string -> string
+
+(* PackStream decoding *)
+val decode_value_from_string : string -> (Value.value, string) result
 (*
   Produce Bolt chunked frames for a single message payload.
   Returns a list of cstructs to write in order: for each chunk

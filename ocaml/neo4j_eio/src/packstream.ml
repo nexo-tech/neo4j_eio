@@ -219,7 +219,7 @@ and encode_map (m : Value.value Value.StringMap.t) : string =
       Bytes.to_string buf
   in
   let entries = Value.StringMap.fold (fun k v acc ->
-    encode_string k ^ encode_value v ^ acc
+    acc ^ encode_string k ^ encode_value v
   ) m "" in
   header ^ entries
 
@@ -343,4 +343,225 @@ and encode_datetime_offset (dt : Value.datetime_offset) : string =
     Value.Int dt.timezone_offset_seconds
   ] in
   encode_struct sig_datetime_offset fields
+
+(* PackStream decoding using Angstrom *)
+open Angstrom
+
+let decode_error msg = fail msg
+
+let parse_uint8 = any_char >>| Char.code
+let parse_uint16 = BE.any_uint16
+let parse_int16 = BE.any_int16
+let parse_int32 = BE.any_int32
+let parse_int64 = BE.any_int64
+let parse_float64 =
+  parse_int64 >>| Int64.float_of_bits
+
+let rec decode_value () =
+  parse_uint8 >>= fun marker ->
+  match marker with
+  | 0xC0 -> return Value.Null
+  | 0xC3 -> return (Value.Bool true)
+  | 0xC2 -> return (Value.Bool false)
+  | 0xC8 -> (* INT_8 *)
+      any_char >>| fun c -> Value.Int (Int64.of_int (Char.code c))
+  | 0xC9 -> (* INT_16 *)
+      parse_int16 >>| fun n -> Value.Int (Int64.of_int n)
+  | 0xCA -> (* INT_32 *)
+      parse_int32 >>| fun n -> Value.Int (Int64.of_int32 n)
+  | 0xCB -> (* INT_64 *)
+      parse_int64 >>| fun n -> Value.Int n
+  | 0xC1 -> (* FLOAT_64 *)
+      parse_float64 >>| fun f -> Value.Float f
+  | 0xCC -> (* BYTES_8 *)
+      parse_uint8 >>= fun len ->
+      take len >>| fun s -> Value.Bytes s
+  | 0xCD -> (* BYTES_16 *)
+      parse_uint16 >>= fun len ->
+      take len >>| fun s -> Value.Bytes s
+  | 0xCE -> (* BYTES_32 *)
+      parse_int32 >>= fun len32 ->
+      let len = Int32.to_int len32 in
+      take len >>| fun s -> Value.Bytes s
+  | 0xD0 -> (* STRING_8 *)
+      parse_uint8 >>= fun len ->
+      take len >>| fun s -> Value.Text s
+  | 0xD1 -> (* STRING_16 *)
+      parse_uint16 >>= fun len ->
+      take len >>| fun s -> Value.Text s
+  | 0xD2 -> (* STRING_32 *)
+      parse_int32 >>= fun len32 ->
+      let len = Int32.to_int len32 in
+      take len >>| fun s -> Value.Text s
+  | 0xD4 -> (* LIST_8 *)
+      parse_uint8 >>= decode_list
+  | 0xD5 -> (* LIST_16 *)
+      parse_uint16 >>= decode_list
+  | 0xD6 -> (* LIST_32 *)
+      parse_int32 >>= fun len32 ->
+      decode_list (Int32.to_int len32)
+  | 0xD8 -> (* MAP_8 *)
+      parse_uint8 >>= decode_map
+  | 0xD9 -> (* MAP_16 *)
+      parse_uint16 >>= decode_map
+  | 0xDA -> (* MAP_32 *)
+      parse_int32 >>= fun len32 ->
+      decode_map (Int32.to_int len32)
+  | 0xDC -> (* STRUCT_8 *)
+      parse_uint8 >>= fun len ->
+      parse_uint8 >>= fun sig_ ->
+      decode_struct sig_ len
+  | 0xDD -> (* STRUCT_16 *)
+      parse_uint16 >>= fun len ->
+      parse_uint8 >>= fun sig_ ->
+      decode_struct sig_ len
+  | m when m >= 0xF0 && m <= 0xFF -> (* Tiny negative int *)
+      let n = m - 256 in
+      return (Value.Int (Int64.of_int n))
+  | m when m >= 0x00 && m <= 0x7F -> (* Tiny positive int *)
+      return (Value.Int (Int64.of_int m))
+  | m when m >= 0x80 && m <= 0x8F -> (* Tiny string *)
+      let len = m - 0x80 in
+      take len >>| fun s -> Value.Text s
+  | m when m >= 0x90 && m <= 0x9F -> (* Tiny list *)
+      let len = m - 0x90 in
+      decode_list len
+  | m when m >= 0xA0 && m <= 0xAF -> (* Tiny map *)
+      let len = m - 0xA0 in
+      decode_map len
+  | m when m >= 0xB0 && m <= 0xBF -> (* Tiny struct *)
+      let len = m - 0xB0 in
+      parse_uint8 >>= fun sig_ ->
+      decode_struct sig_ len
+  | _ -> decode_error (Printf.sprintf "Unknown marker: 0x%02x" marker)
+
+and decode_list len =
+  count len (decode_value ()) >>| fun items -> Value.List items
+
+and decode_map len =
+  count len (
+    decode_value () >>= fun k ->
+    decode_value () >>= fun v ->
+    match k with
+    | Value.Text key -> return (key, v)
+    | _ -> decode_error "Map key must be a string"
+  ) >>| fun pairs ->
+  Value.Map (Value.StringMap.of_seq (List.to_seq pairs))
+
+and decode_struct sig_ len =
+  count len (decode_value ()) >>= fun fields ->
+  match sig_ with
+  | 0x4E -> decode_node fields
+  | 0x52 -> decode_relationship fields
+  | 0x72 -> decode_unbound_relationship fields
+  | 0x50 -> decode_path fields
+  | 0x44 -> decode_date fields
+  | 0x54 -> decode_time fields
+  | 0x74 -> decode_local_time fields
+  | 0x64 -> decode_local_datetime fields
+  | 0x66 -> decode_datetime_zone_id fields
+  | 0x46 -> decode_datetime_offset fields
+  | 0x45 -> decode_duration fields
+  | 0x58 -> decode_point2d fields
+  | 0x59 -> decode_point3d fields
+  | _ -> return (Value.Struct { signature = sig_; fields })
+
+and decode_node fields =
+  match fields with
+  | [Value.Int node_id; Value.List labels; Value.Map props] ->
+      let label_strs = List.filter_map (function
+        | Value.Text s -> Some s
+        | _ -> None
+      ) labels in
+      return (Value.Node { node_id; labels = label_strs; props })
+  | _ -> decode_error "Invalid node structure"
+
+and decode_relationship fields =
+  match fields with
+  | [Value.Int rel_id; Value.Int start_node_id; Value.Int end_node_id; Value.Text rel_type; Value.Map rel_props] ->
+      return (Value.Relationship { rel_id; start_node_id; end_node_id; rel_type; rel_props })
+  | _ -> decode_error "Invalid relationship structure"
+
+and decode_unbound_relationship fields =
+  match fields with
+  | [Value.Int urel_id; Value.Text urel_type; Value.Map urel_props] ->
+      return (Value.UnboundRelationship { urel_id; urel_type; urel_props })
+  | _ -> decode_error "Invalid unbound relationship structure"
+
+and decode_path fields =
+  match fields with
+  | [Value.List nodes; Value.List rels; Value.List seq] ->
+      let path_nodes = List.filter_map (function
+        | Value.Node n -> Some n
+        | _ -> None
+      ) nodes in
+      let path_rels = List.filter_map (function
+        | Value.UnboundRelationship r -> Some r
+        | _ -> None
+      ) rels in
+      let path_seq = List.filter_map (function
+        | Value.Int i -> Some (Int64.to_int i)
+        | _ -> None
+      ) seq in
+      return (Value.Path { path_nodes; path_rels; path_seq })
+  | _ -> decode_error "Invalid path structure"
+
+and decode_point2d fields =
+  match fields with
+  | [Value.Int srid; Value.Float x; Value.Float y] ->
+      return (Value.Point2D { srid; x; y })
+  | _ -> decode_error "Invalid Point2D structure"
+
+and decode_point3d fields =
+  match fields with
+  | [Value.Int srid; Value.Float x; Value.Float y; Value.Float z] ->
+      return (Value.Point3D { srid; x; y; z })
+  | _ -> decode_error "Invalid Point3D structure"
+
+and decode_duration fields =
+  match fields with
+  | [Value.Int months; Value.Int days; Value.Int seconds; Value.Int nanoseconds] ->
+      return (Value.Duration { months; days; seconds; nanoseconds })
+  | _ -> decode_error "Invalid duration structure"
+
+and decode_date fields =
+  match fields with
+  | [Value.Int days_since_epoch] ->
+      return (Value.Date { days_since_epoch })
+  | _ -> decode_error "Invalid date structure"
+
+and decode_local_time fields =
+  match fields with
+  | [Value.Int nanoseconds_since_midnight] ->
+      return (Value.LocalTime { nanoseconds_since_midnight })
+  | _ -> decode_error "Invalid local time structure"
+
+and decode_time fields =
+  match fields with
+  | [Value.Int nanoseconds_since_midnight; Value.Int timezone_offset_seconds] ->
+      return (Value.Time { nanoseconds_since_midnight; timezone_offset_seconds })
+  | _ -> decode_error "Invalid time structure"
+
+and decode_local_datetime fields =
+  match fields with
+  | [Value.Int seconds_since_epoch; Value.Int nanoseconds] ->
+      return (Value.LocalDateTime { seconds_since_epoch; nanoseconds })
+  | _ -> decode_error "Invalid local datetime structure"
+
+and decode_datetime_zone_id fields =
+  match fields with
+  | [Value.Int seconds_since_epoch; Value.Int nanoseconds; Value.Text timezone_id] ->
+      return (Value.DateTimeZoneId { seconds_since_epoch; nanoseconds; timezone_id })
+  | _ -> decode_error "Invalid datetime with zone id structure"
+
+and decode_datetime_offset fields =
+  match fields with
+  | [Value.Int seconds_since_epoch; Value.Int nanoseconds; Value.Int timezone_offset_seconds] ->
+      return (Value.DateTimeOffset { seconds_since_epoch; nanoseconds; timezone_offset_seconds })
+  | _ -> decode_error "Invalid datetime with offset structure"
+
+let decode_value_from_string s =
+  match parse_string ~consume:All (decode_value ()) s with
+  | Ok v -> Ok v
+  | Error msg -> Error msg
 
