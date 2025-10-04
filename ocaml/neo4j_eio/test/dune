@@ -10,6 +10,12 @@
  (action (run %{exe:value_test.exe})))
 
 (test
+ (name packstream_encode_test)
+ (modules packstream_encode_test)
+ (libraries neo4j_eio alcotest)
+ (action (run %{exe:packstream_encode_test.exe})))
+
+(test
  (name handshake_test)
  (modules handshake_test)
  (libraries neo4j_eio eio eio_main alcotest test_helper)
