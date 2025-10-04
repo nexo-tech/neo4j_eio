@@ -62,3 +62,9 @@
  (modules connection_cleanup_test)
  (libraries neo4j_eio eio eio_main alcotest test_helper)
  (action (run %{exe:connection_cleanup_test.exe})))
+
+(test
+ (name session_concurrency_test)
+ (modules session_concurrency_test)
+ (libraries neo4j_eio eio eio_main alcotest test_helper)
+ (action (run %{exe:session_concurrency_test.exe})))

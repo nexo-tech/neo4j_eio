@@ -468,22 +468,55 @@ and decode_struct sig_ len =
 
 and decode_node fields =
   match fields with
+  (* Bolt 5+ format: element_id, node_id, labels, props *)
+  | [Value.Text _element_id; Value.Int node_id; Value.List labels; Value.Map props] ->
+      let label_strs = List.filter_map (function
+        | Value.Text s -> Some s
+        | _ -> None
+      ) labels in
+      return (Value.Node { node_id; labels = label_strs; props })
+  (* Bolt 5+ alternative format: node_id, labels, props, element_id *)
+  | [Value.Int node_id; Value.List labels; Value.Map props; Value.Text _element_id] ->
+      let label_strs = List.filter_map (function
+        | Value.Text s -> Some s
+        | _ -> None
+      ) labels in
+      return (Value.Node { node_id; labels = label_strs; props })
+  (* Bolt 4 and earlier: node_id, labels, props *)
   | [Value.Int node_id; Value.List labels; Value.Map props] ->
       let label_strs = List.filter_map (function
         | Value.Text s -> Some s
         | _ -> None
       ) labels in
       return (Value.Node { node_id; labels = label_strs; props })
-  | _ -> decode_error "Invalid node structure"
+  | _ ->
+      let types = List.map (function
+        | Value.Text _ -> "Text"
+        | Value.Int _ -> "Int"
+        | Value.List _ -> "List"
+        | Value.Map _ -> "Map"
+        | _ -> "Other"
+      ) fields in
+      decode_error (Printf.sprintf "Invalid node structure: got [%s] with %d fields"
+        (String.concat "; " types) (List.length fields))
 
 and decode_relationship fields =
   match fields with
+  (* Bolt 5+ format: element_id, rel_id, start_node_id, start_element_id, end_node_id, end_element_id, type, props *)
+  | [Value.Text _element_id; Value.Int rel_id; Value.Int start_node_id; Value.Text _start_element_id;
+     Value.Int end_node_id; Value.Text _end_element_id; Value.Text rel_type; Value.Map rel_props] ->
+      return (Value.Relationship { rel_id; start_node_id; end_node_id; rel_type; rel_props })
+  (* Bolt 4 and earlier: rel_id, start_node_id, end_node_id, type, props *)
   | [Value.Int rel_id; Value.Int start_node_id; Value.Int end_node_id; Value.Text rel_type; Value.Map rel_props] ->
       return (Value.Relationship { rel_id; start_node_id; end_node_id; rel_type; rel_props })
   | _ -> decode_error "Invalid relationship structure"
 
 and decode_unbound_relationship fields =
   match fields with
+  (* Bolt 5+ format: element_id, rel_id, type, props *)
+  | [Value.Text _element_id; Value.Int urel_id; Value.Text urel_type; Value.Map urel_props] ->
+      return (Value.UnboundRelationship { urel_id; urel_type; urel_props })
+  (* Bolt 4 and earlier: rel_id, type, props *)
   | [Value.Int urel_id; Value.Text urel_type; Value.Map urel_props] ->
       return (Value.UnboundRelationship { urel_id; urel_type; urel_props })
   | _ -> decode_error "Invalid unbound relationship structure"
