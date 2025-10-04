@@ -63,6 +63,17 @@ let graph_tests = [
     urel_type = "LIKES";
     urel_props = Value.StringMap.empty
   });
+
+  test_roundtrip "path" (Value.Path {
+    path_nodes = [
+      { node_id = 1L; labels = ["A"]; props = Value.StringMap.empty };
+      { node_id = 2L; labels = ["B"]; props = Value.StringMap.empty }
+    ];
+    path_rels = [
+      { urel_id = 10L; urel_type = "LINK"; urel_props = Value.StringMap.empty }
+    ];
+    path_seq = [1; 1]
+  });
 ]
 
 let temporal_tests = [
