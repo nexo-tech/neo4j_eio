@@ -74,6 +74,9 @@ let run t ~statement ?(parameters = Value.StringMap.empty) ?(fetch_size = -1L) (
                 Error (Error.Protocol "Unexpected response during PULL")
           in
           collect_records []
+      | Ok (Value.Struct { signature = 0x7E; _ }) ->
+          (* IGNORED - query was ignored (session in failed state after previous error) *)
+          Error (Error.Protocol "RUN was ignored - session in failed state")
       | Ok (Value.Struct { signature = 0x7F; fields }) ->
           (* FAILURE *)
           let err = match fields with
@@ -143,6 +146,10 @@ let rollback t =
       match Connection.recv_response t.flow with
       | Error e -> Error (Error.Protocol ("ROLLBACK decode failed: " ^ e))
       | Ok (Value.Struct { signature = 0x70; _ }) ->
+          (* SUCCESS - rollback completed *)
+          Ok ()
+      | Ok (Value.Struct { signature = 0x7E; _ }) ->
+          (* IGNORED - transaction was already failed, rollback implicit *)
           Ok ()
       | Ok (Value.Struct { signature = 0x7F; fields }) ->
           let err = match fields with
@@ -153,28 +160,6 @@ let rollback t =
       | Ok _ ->
           Error (Error.Protocol "Unexpected ROLLBACK response")
     )
-
-(* Transact helper: runs actions in a transaction, commits on success, rollback on error *)
-let transact t f =
-  if t.closed then
-    Error (Error.Protocol "Session is closed")
-  else
-    match begin_transaction t () with
-    | Error e -> Error e
-    | Ok () ->
-        match f t with
-        | Error e ->
-            (* Action failed - rollback and return error *)
-            (match rollback t with
-             | Ok () -> Error e
-             | Error _ ->
-                 (* Rollback failed - return original error (hasbolt style) *)
-                 Error e)
-        | Ok result ->
-            (* Action succeeded - commit *)
-            match commit t with
-            | Ok () -> Ok result
-            | Error e -> Error e
 
 (* Reset the session to clear failed state *)
 let reset t =
@@ -198,6 +183,33 @@ let reset t =
       | Ok _ ->
           Error (Error.Protocol "Unexpected RESET response")
     )
+
+(* Transact helper: runs actions in a transaction, commits on success, rollback on error *)
+let transact t f =
+  if t.closed then
+    Error (Error.Protocol "Session is closed")
+  else
+    match begin_transaction t () with
+    | Error e -> Error e
+    | Ok () ->
+        match f t with
+        | Error e ->
+            (* Action failed - rollback and return error *)
+            (match rollback t with
+             | Ok () ->
+                 (* Rollback succeeded or was ignored - might need reset to clear state *)
+                 (* Try reset to ensure session is back to READY state *)
+                 let _ = reset t in
+                 Error e
+             | Error _ ->
+                 (* Rollback failed - try reset and return original error *)
+                 let _ = reset t in
+                 Error e)
+        | Ok result ->
+            (* Action succeeded - commit *)
+            match commit t with
+            | Ok () -> Ok result
+            | Error e -> Error e
 
 (* Close the session *)
 let close t =

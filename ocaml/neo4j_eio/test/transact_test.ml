@@ -29,21 +29,21 @@ let test_transact_success env cfg =
     | Ok _ -> ()
     | Error e -> Alcotest.failf "Test failed: %s" (Error.to_string e)
 
-(* Test transact with error - should rollback *)
-let test_transact_error_rollback env cfg =
-  let unique_label = Printf.sprintf "TestTransactError_%d" (Random.int 1000000) in
+(* Test transact with invalid Cypher - should rollback *)
+let test_transact_invalid_cypher env cfg =
+  let unique_label = Printf.sprintf "TestTransactInvalid_%d" (Random.int 1000000) in
 
   Eio.Switch.run @@ fun sw ->
     match Session.with_session ~sw ~net:env#net cfg (fun session ->
-      (* Use transact with an action that explicitly returns Error *)
+      (* Use transact with an action that has invalid Cypher *)
       let result = Session.transact session (fun s ->
         (* First create a node *)
         let create_query = Printf.sprintf "CREATE (n:%s {value: 42})" unique_label in
         match Session.run s ~statement:create_query () with
         | Error e -> Error e
         | Ok _ ->
-            (* Then explicitly return an error to trigger rollback *)
-            Error (Error.Protocol "Simulated error")
+            (* Then run invalid Cypher - this should fail and trigger rollback *)
+            Session.run s ~statement:"INVALID CYPHER QUERY" ()
       ) in
 
       (* Transaction should have failed and rolled back *)
@@ -191,7 +191,7 @@ let () =
   Alcotest.run "Transact helper tests"
     [ "transact function", [
         Test_helper.with_neo4j "transact success commits" `Quick test_transact_success;
-        Test_helper.with_neo4j "transact error rolls back" `Quick test_transact_error_rollback;
+        Test_helper.with_neo4j "transact invalid cypher rolls back" `Quick test_transact_invalid_cypher;
         Test_helper.with_neo4j "transact explicit error rolls back" `Quick test_transact_explicit_error;
         Test_helper.with_neo4j "multiple transacts work correctly" `Quick test_transact_multiple;
         Test_helper.with_neo4j "transact with complex operations" `Quick test_transact_complex;
