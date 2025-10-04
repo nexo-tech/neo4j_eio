@@ -65,28 +65,22 @@ let run t ~statement ?(parameters = Value.StringMap.empty) ?(fetch_size = -1L) (
                 Ok (List.rev acc |> List.flatten)
             | Ok (Value.Struct { signature = 0x7F; fields }) ->
                 (* FAILURE *)
-                let msg = match fields with
-                | Value.Map m :: _ ->
-                    (match Value.StringMap.find_opt "message" m with
-                    | Some (Value.Text s) -> s
-                    | _ -> "Query failed")
-                | _ -> "Query failed"
+                let err = match fields with
+                | Value.Map m :: _ -> Error.from_failure_map m
+                | _ -> Error.Protocol "Query failed"
                 in
-                Error (Error.Protocol msg)
+                Error err
             | Ok _ ->
                 Error (Error.Protocol "Unexpected response during PULL")
           in
           collect_records []
       | Ok (Value.Struct { signature = 0x7F; fields }) ->
           (* FAILURE *)
-          let msg = match fields with
-          | Value.Map m :: _ ->
-              (match Value.StringMap.find_opt "message" m with
-              | Some (Value.Text s) -> s
-              | _ -> "RUN failed")
-          | _ -> "RUN failed"
+          let err = match fields with
+          | Value.Map m :: _ -> Error.from_failure_map m
+          | _ -> Error.Protocol "RUN failed"
           in
-          Error (Error.Protocol msg)
+          Error err
       | Ok _ ->
           Error (Error.Protocol "Unexpected RUN response")
     )
@@ -105,14 +99,11 @@ let begin_transaction t ?(metadata = Value.StringMap.empty) () =
       | Ok (Value.Struct { signature = 0x70; _ }) ->
           Ok ()
       | Ok (Value.Struct { signature = 0x7F; fields }) ->
-          let msg = match fields with
-          | Value.Map m :: _ ->
-              (match Value.StringMap.find_opt "message" m with
-              | Some (Value.Text s) -> s
-              | _ -> "BEGIN failed")
-          | _ -> "BEGIN failed"
+          let err = match fields with
+          | Value.Map m :: _ -> Error.from_failure_map m
+          | _ -> Error.Protocol "BEGIN failed"
           in
-          Error (Error.Protocol msg)
+          Error err
       | Ok _ ->
           Error (Error.Protocol "Unexpected BEGIN response")
     )
@@ -131,14 +122,11 @@ let commit t =
       | Ok (Value.Struct { signature = 0x70; _ }) ->
           Ok ()
       | Ok (Value.Struct { signature = 0x7F; fields }) ->
-          let msg = match fields with
-          | Value.Map m :: _ ->
-              (match Value.StringMap.find_opt "message" m with
-              | Some (Value.Text s) -> s
-              | _ -> "COMMIT failed")
-          | _ -> "COMMIT failed"
+          let err = match fields with
+          | Value.Map m :: _ -> Error.from_failure_map m
+          | _ -> Error.Protocol "COMMIT failed"
           in
-          Error (Error.Protocol msg)
+          Error err
       | Ok _ ->
           Error (Error.Protocol "Unexpected COMMIT response")
     )
@@ -157,16 +145,36 @@ let rollback t =
       | Ok (Value.Struct { signature = 0x70; _ }) ->
           Ok ()
       | Ok (Value.Struct { signature = 0x7F; fields }) ->
-          let msg = match fields with
-          | Value.Map m :: _ ->
-              (match Value.StringMap.find_opt "message" m with
-              | Some (Value.Text s) -> s
-              | _ -> "ROLLBACK failed")
-          | _ -> "ROLLBACK failed"
+          let err = match fields with
+          | Value.Map m :: _ -> Error.from_failure_map m
+          | _ -> Error.Protocol "ROLLBACK failed"
           in
-          Error (Error.Protocol msg)
+          Error err
       | Ok _ ->
           Error (Error.Protocol "Unexpected ROLLBACK response")
+    )
+
+(* Reset the session to clear failed state *)
+let reset t =
+  if t.closed then
+    Error (Error.Protocol "Session is closed")
+  else
+    Mutex.use_rw t.mutex ~protect:true (fun () ->
+      let reset_msg = Protocol.build_reset () in
+      Connection.send_message t.flow reset_msg;
+
+      match Connection.recv_response t.flow with
+      | Error e -> Error (Error.Protocol ("RESET decode failed: " ^ e))
+      | Ok (Value.Struct { signature = 0x70; _ }) ->
+          Ok ()
+      | Ok (Value.Struct { signature = 0x7F; fields }) ->
+          let err = match fields with
+          | Value.Map m :: _ -> Error.from_failure_map m
+          | _ -> Error.Protocol "RESET failed"
+          in
+          Error err
+      | Ok _ ->
+          Error (Error.Protocol "Unexpected RESET response")
     )
 
 (* Close the session *)

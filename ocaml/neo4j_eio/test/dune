@@ -68,3 +68,9 @@
  (modules session_concurrency_test)
  (libraries neo4j_eio eio eio_main alcotest test_helper)
  (action (run %{exe:session_concurrency_test.exe})))
+
+(test
+ (name error_reset_test)
+ (modules error_reset_test)
+ (libraries neo4j_eio eio eio_main alcotest test_helper)
+ (action (run %{exe:error_reset_test.exe})))
