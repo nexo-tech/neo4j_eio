@@ -33,3 +33,8 @@ type response_code =
 
 val response_code_of_int : int -> response_code option
 val pp_response_code : response_code -> string
+
+(* Message builders *)
+val build_hello : user:string -> password:string -> user_agent:string -> string
+val build_goodbye : unit -> string
+val build_reset : unit -> string

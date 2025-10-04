@@ -44,3 +44,9 @@
  (modules protocol_framing_test)
  (libraries neo4j_eio eio eio_main alcotest)
  (action (run %{exe:protocol_framing_test.exe})))
+
+(test
+ (name auth_test)
+ (modules auth_test)
+ (libraries neo4j_eio eio eio_main alcotest test_helper)
+ (action (run %{exe:auth_test.exe})))

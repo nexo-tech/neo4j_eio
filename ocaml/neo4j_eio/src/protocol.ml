@@ -157,3 +157,25 @@ let pp_response_code = function
   | RECORD -> "RECORD"
   | IGNORED -> "IGNORED"
   | FAILURE -> "FAILURE"
+
+(* Build HELLO message (v3+ uses single map with all fields including auth) *)
+let build_hello ~user ~password ~user_agent : string =
+  let open Value in
+  let extra = StringMap.empty
+    |> StringMap.add "user_agent" (Text user_agent)
+    |> StringMap.add "scheme" (Text "basic")
+    |> StringMap.add "principal" (Text user)
+    |> StringMap.add "credentials" (Text password)
+  in
+  let msg_struct = Struct { signature = message_code_to_int HELLO; fields = [Map extra] } in
+  Packstream.encode_value msg_struct
+
+(* Build GOODBYE message *)
+let build_goodbye () : string =
+  let msg_struct = Value.Struct { signature = message_code_to_int GOODBYE; fields = [] } in
+  Packstream.encode_value msg_struct
+
+(* Build RESET message *)
+let build_reset () : string =
+  let msg_struct = Value.Struct { signature = message_code_to_int RESET; fields = [] } in
+  Packstream.encode_value msg_struct
