@@ -104,3 +104,9 @@
  (modules transaction_test)
  (libraries neo4j_eio eio eio_main alcotest test_helper)
  (action (run %{exe:transaction_test.exe})))
+
+(test
+ (name transact_test)
+ (modules transact_test)
+ (libraries neo4j_eio eio eio_main alcotest test_helper)
+ (action (run %{exe:transact_test.exe})))

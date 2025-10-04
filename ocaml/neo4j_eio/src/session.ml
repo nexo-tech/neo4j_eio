@@ -154,6 +154,28 @@ let rollback t =
           Error (Error.Protocol "Unexpected ROLLBACK response")
     )
 
+(* Transact helper: runs actions in a transaction, commits on success, rollback on error *)
+let transact t f =
+  if t.closed then
+    Error (Error.Protocol "Session is closed")
+  else
+    match begin_transaction t () with
+    | Error e -> Error e
+    | Ok () ->
+        match f t with
+        | Error e ->
+            (* Action failed - rollback and return error *)
+            (match rollback t with
+             | Ok () -> Error e
+             | Error _ ->
+                 (* Rollback failed - return original error (hasbolt style) *)
+                 Error e)
+        | Ok result ->
+            (* Action succeeded - commit *)
+            match commit t with
+            | Ok () -> Ok result
+            | Error e -> Error e
+
 (* Reset the session to clear failed state *)
 let reset t =
   if t.closed then
