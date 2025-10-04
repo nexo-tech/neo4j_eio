@@ -2,4 +2,4 @@
  (name neo4j_eio)
  (public_name neo4j_eio)
  (modules :standard)
- (libraries eio cstruct angstrom))
+ (libraries eio cstruct angstrom tls-eio x509 ca-certs domain-name))

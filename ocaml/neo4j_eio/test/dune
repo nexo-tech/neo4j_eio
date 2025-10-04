@@ -56,3 +56,9 @@
  (modules run_query_test)
  (libraries neo4j_eio eio eio_main alcotest test_helper)
  (action (run %{exe:run_query_test.exe})))
+
+(test
+ (name connection_cleanup_test)
+ (modules connection_cleanup_test)
+ (libraries neo4j_eio eio eio_main alcotest test_helper)
+ (action (run %{exe:connection_cleanup_test.exe})))
