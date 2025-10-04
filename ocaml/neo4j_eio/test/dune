@@ -50,3 +50,9 @@
  (modules auth_test)
  (libraries neo4j_eio eio eio_main alcotest test_helper)
  (action (run %{exe:auth_test.exe})))
+
+(test
+ (name run_query_test)
+ (modules run_query_test)
+ (libraries neo4j_eio eio eio_main alcotest test_helper)
+ (action (run %{exe:run_query_test.exe})))

@@ -112,3 +112,58 @@ let goodbye (flow : _ Flow.two_way) : unit =
     Flow.close flow
   with
   | _ -> Flow.close flow
+
+(* Run a Cypher query and pull all results *)
+let run_query (flow : _ Flow.two_way) ~statement ?(parameters = Value.StringMap.empty) () : (Value.value list, Error.t) result =
+  try
+    (* Send RUN *)
+    let run_msg = Protocol.build_run ~statement ~parameters () in
+    send_message flow run_msg;
+
+    (* Receive SUCCESS response *)
+    match recv_response flow with
+    | Error e -> Error (Error.Protocol ("RUN decode failed: " ^ e))
+    | Ok (Value.Struct { signature = 0x70; _ }) ->
+        (* SUCCESS - now send PULL to get records *)
+        let pull_msg = Protocol.build_pull ~n:(Some (-1L)) () in
+        send_message flow pull_msg;
+
+        (* Collect records *)
+        let rec collect_records acc =
+          match recv_response flow with
+          | Error e -> Error (Error.Protocol ("PULL decode failed: " ^ e))
+          | Ok (Value.Struct { signature = 0x71; fields = [Value.List records] }) ->
+              (* RECORD - continue collecting *)
+              collect_records (records :: acc)
+          | Ok (Value.Struct { signature = 0x70; _ }) ->
+              (* SUCCESS - end of stream *)
+              Ok (List.rev acc |> List.flatten)
+          | Ok (Value.Struct { signature = 0x7F; fields }) ->
+              (* FAILURE *)
+              let msg = match fields with
+              | Value.Map m :: _ ->
+                  (match Value.StringMap.find_opt "message" m with
+                  | Some (Value.Text s) -> s
+                  | _ -> "Query failed")
+              | _ -> "Query failed"
+              in
+              Error (Error.Protocol msg)
+          | Ok _ ->
+              Error (Error.Protocol "Unexpected response during PULL")
+        in
+        collect_records []
+    | Ok (Value.Struct { signature = 0x7F; fields }) ->
+        (* FAILURE *)
+        let msg = match fields with
+        | Value.Map m :: _ ->
+            (match Value.StringMap.find_opt "message" m with
+            | Some (Value.Text s) -> s
+            | _ -> "RUN failed")
+        | _ -> "RUN failed"
+        in
+        Error (Error.Protocol msg)
+    | Ok _ ->
+        Error (Error.Protocol "Unexpected RUN response")
+  with
+  | End_of_file -> Error (Error.Io "Connection closed by peer")
+  | exn -> Error (Error.Io (Printexc.to_string exn))

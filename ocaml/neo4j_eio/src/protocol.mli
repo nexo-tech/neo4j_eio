@@ -38,3 +38,9 @@ val pp_response_code : response_code -> string
 val build_hello : user:string -> password:string -> user_agent:string -> string
 val build_goodbye : unit -> string
 val build_reset : unit -> string
+val build_run : statement:string -> ?parameters:Value.value Value.StringMap.t -> ?extra:Value.value Value.StringMap.t -> unit -> string
+val build_pull : ?n:int64 option -> unit -> string
+val build_discard : ?n:int64 option -> unit -> string
+val build_begin : ?extra:Value.value Value.StringMap.t -> unit -> string
+val build_commit : unit -> string
+val build_rollback : unit -> string

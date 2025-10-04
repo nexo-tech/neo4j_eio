@@ -179,3 +179,44 @@ let build_goodbye () : string =
 let build_reset () : string =
   let msg_struct = Value.Struct { signature = message_code_to_int RESET; fields = [] } in
   Packstream.encode_value msg_struct
+
+(* Build RUN message - v3+ uses 3 fields (statement, parameters, extra) *)
+let build_run ~statement ?(parameters = Value.StringMap.empty) ?(extra = Value.StringMap.empty) () : string =
+  let open Value in
+  let msg_struct = Struct { signature = message_code_to_int RUN; fields = [Text statement; Map parameters; Map extra] } in
+  Packstream.encode_value msg_struct
+
+(* Build PULL message (v3+ uses PULL with optional n, empty map = PULL_ALL) *)
+let build_pull ?(n = None) () : string =
+  let open Value in
+  let extra = match n with
+    | None -> StringMap.empty  (* PULL_ALL *)
+    | Some count -> StringMap.add "n" (Int count) StringMap.empty
+  in
+  let msg_struct = Struct { signature = message_code_to_int PULL; fields = [Map extra] } in
+  Packstream.encode_value msg_struct
+
+(* Build DISCARD message *)
+let build_discard ?(n = None) () : string =
+  let open Value in
+  let extra = match n with
+    | None -> StringMap.empty  (* DISCARD_ALL *)
+    | Some count -> StringMap.add "n" (Int count) StringMap.empty
+  in
+  let msg_struct = Struct { signature = message_code_to_int DISCARD; fields = [Map extra] } in
+  Packstream.encode_value msg_struct
+
+(* Build BEGIN message *)
+let build_begin ?(extra = Value.StringMap.empty) () : string =
+  let msg_struct = Value.Struct { signature = message_code_to_int BEGIN; fields = [Map extra] } in
+  Packstream.encode_value msg_struct
+
+(* Build COMMIT message *)
+let build_commit () : string =
+  let msg_struct = Value.Struct { signature = message_code_to_int COMMIT; fields = [] } in
+  Packstream.encode_value msg_struct
+
+(* Build ROLLBACK message *)
+let build_rollback () : string =
+  let msg_struct = Value.Struct { signature = message_code_to_int ROLLBACK; fields = [] } in
+  Packstream.encode_value msg_struct
