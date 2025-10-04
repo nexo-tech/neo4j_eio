@@ -27,7 +27,7 @@ let require_neo4j name speed test_fn =
     Eio_main.run @@ fun env ->
       if not (is_neo4j_available ~net:env#net cfg) then
         Alcotest.failf
-          "Neo4j required but unavailable at %s:%d - ensure Docker container is running (docker compose up -d neo4j)"
-          cfg.host cfg.port
+          "Neo4j required but unavailable at %s - ensure Docker container is running (docker compose up -d neo4j)"
+          cfg.uri
       else
         test_fn env cfg)

@@ -92,3 +92,9 @@
  (modules record_neo4j_test)
  (libraries neo4j_eio eio eio_main alcotest test_helper)
  (action (run %{exe:record_neo4j_test.exe})))
+
+(test
+ (name config_test)
+ (modules config_test)
+ (libraries neo4j_eio unix alcotest)
+ (action (run %{exe:config_test.exe})))

@@ -21,8 +21,8 @@ let test_auth_goodbye env cfg =
         Alcotest.failf "Authentication failed: %s" (Error.to_string e)
 
 let test_auth_wrong_password env cfg =
-  let bad_cfg : Config.t = { Config.host = cfg.Config.host; port = cfg.port; user = cfg.user;
-                             password = "wrongpassword"; use_tls = cfg.use_tls } in
+  let bad_cfg = Config.make ~uri:cfg.Config.uri ~user:cfg.user ~password:"wrongpassword"
+                             ~use_tls:cfg.use_tls () in
   Eio.Switch.run @@ fun sw ->
     match Connection.authenticate ~sw ~net:env#net bad_cfg with
     | Ok (_version, flow) ->

@@ -1,8 +1,15 @@
 open Eio
 
+(* Parse host and port from config URI *)
+let get_host_port cfg =
+  match Config.parse_uri cfg.Config.uri with
+  | Ok (host, port) -> (host, port)
+  | Error msg -> failwith ("Failed to parse URI: " ^ msg)
+
 (* Connect with optional TLS support - for now TLS is stub *)
 let connect_flow ~sw ~net (cfg : Config.t) =
-  let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, cfg.port) in
+  let (_, port) = get_host_port cfg in
+  let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, port) in
   let tcp_flow = Net.connect ~sw net addr in
   if cfg.use_tls then
     failwith "TLS support available but type-constrained - use use_tls=false for now"
@@ -11,7 +18,8 @@ let connect_flow ~sw ~net (cfg : Config.t) =
 
 (* TLS connection helper - separate function to handle TLS type *)
 let connect_tls ~sw ~net (cfg : Config.t) : Tls_eio.t =
-  let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, cfg.port) in
+  let (host, port) = get_host_port cfg in
+  let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, port) in
   let tcp_flow = Net.connect ~sw net addr in
   let authenticator =
     match Ca_certs.authenticator () with
@@ -20,7 +28,7 @@ let connect_tls ~sw ~net (cfg : Config.t) : Tls_eio.t =
   in
   let tls_config = Tls.Config.client ~authenticator () in
   let host_domain =
-    match Domain_name.of_string cfg.host with
+    match Domain_name.of_string host with
     | Ok d -> Domain_name.host_exn d
     | Error (`Msg msg) -> failwith ("Invalid hostname: " ^ msg)
   in
@@ -60,7 +68,8 @@ let recv_response (flow : _ Flow.source) : (Value.value, string) result =
 
 let handshake ~sw ~net (cfg : Config.t) : (Protocol.version, Error.t) result =
   try
-    let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, cfg.port) in
+    let (_, port) = get_host_port cfg in
+    let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, port) in
     let flow = Net.connect ~sw net addr in
         Fun.protect
           ~finally:(fun () -> Flow.close flow)
@@ -84,7 +93,8 @@ let handshake ~sw ~net (cfg : Config.t) : (Protocol.version, Error.t) result =
 (* Authenticate with HELLO (v4) or HELLO+LOGON (v5) *)
 let authenticate ~sw ~net (cfg : Config.t) =
   try
-    let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, cfg.port) in
+    let (_, port) = get_host_port cfg in
+    let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, port) in
     let flow = Net.connect ~sw net addr in
 
     (* Handshake *)
