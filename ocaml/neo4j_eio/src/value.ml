@@ -167,3 +167,14 @@ and pp_path ppf { path_nodes; path_rels; path_seq } =
   List.iteri (fun i s -> if i > 0 then Format.fprintf ppf ",@ "; Format.fprintf ppf "%d" s) path_seq;
   Format.fprintf ppf "])"
 
+(* Helper constructors for building values *)
+let null = Null
+let bool b = Bool b
+let int i = Int i
+let int32 i = Int (Int64.of_int32 i)
+let int_of_int i = Int (Int64.of_int i)
+let float f = Float f
+let text s = Text s
+let bytes b = Bytes b
+let list l = List l
+let map m = Map m

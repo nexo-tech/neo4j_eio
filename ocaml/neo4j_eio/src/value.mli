@@ -74,3 +74,15 @@ val pp_relationship : Format.formatter -> relationship -> unit
 val pp_urelationship : Format.formatter -> urelationship -> unit
 val pp_path : Format.formatter -> path -> unit
 val pp_value : Format.formatter -> value -> unit
+
+(* Helper constructors for building values *)
+val null : value
+val bool : bool -> value
+val int : int64 -> value
+val int32 : int32 -> value
+val int_of_int : int -> value
+val float : float -> value
+val text : string -> value
+val bytes : string -> value
+val list : value list -> value
+val map : value StringMap.t -> value

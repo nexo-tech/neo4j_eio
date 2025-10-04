@@ -74,3 +74,9 @@
  (modules error_reset_test)
  (libraries neo4j_eio eio eio_main alcotest test_helper)
  (action (run %{exe:error_reset_test.exe})))
+
+(test
+ (name high_level_api_test)
+ (modules high_level_api_test)
+ (libraries neo4j_eio eio eio_main alcotest test_helper)
+ (action (run %{exe:high_level_api_test.exe})))
