@@ -80,3 +80,15 @@
  (modules high_level_api_test)
  (libraries neo4j_eio eio eio_main alcotest test_helper)
  (action (run %{exe:high_level_api_test.exe})))
+
+(test
+ (name record_test)
+ (modules record_test)
+ (libraries neo4j_eio alcotest)
+ (action (run %{exe:record_test.exe})))
+
+(test
+ (name record_neo4j_test)
+ (modules record_neo4j_test)
+ (libraries neo4j_eio eio eio_main alcotest test_helper)
+ (action (run %{exe:record_neo4j_test.exe})))
