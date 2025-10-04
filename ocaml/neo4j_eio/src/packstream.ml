@@ -459,8 +459,10 @@ and decode_struct sig_ len =
   | 0x54 -> decode_time fields
   | 0x74 -> decode_local_time fields
   | 0x64 -> decode_local_datetime fields
-  | 0x66 -> decode_datetime_zone_id fields
-  | 0x46 -> decode_datetime_offset fields
+  | 0x66 -> decode_datetime_zone_id fields  (* 'f' - Bolt 4 *)
+  | 0x69 -> decode_datetime_zone_id fields  (* 'i' - Bolt 5+ *)
+  | 0x46 -> decode_datetime_offset fields   (* 'F' - Bolt 4 *)
+  | 0x49 -> decode_datetime_offset fields   (* 'I' - Bolt 5+ *)
   | 0x45 -> decode_duration fields
   | 0x58 -> decode_point2d fields
   | 0x59 -> decode_point3d fields
@@ -502,24 +504,46 @@ and decode_node fields =
 
 and decode_relationship fields =
   match fields with
-  (* Bolt 5+ format: element_id, rel_id, start_node_id, start_element_id, end_node_id, end_element_id, type, props *)
-  | [Value.Text _element_id; Value.Int rel_id; Value.Int start_node_id; Value.Text _start_element_id;
-     Value.Int end_node_id; Value.Text _end_element_id; Value.Text rel_type; Value.Map rel_props] ->
+  (* Bolt 5+ format (actual): rel_id, start_node_id, end_node_id, type, props, element_id, start_element_id, end_element_id *)
+  | [Value.Int rel_id; Value.Int start_node_id; Value.Int end_node_id; Value.Text rel_type; Value.Map rel_props;
+     Value.Text _element_id; Value.Text _start_element_id; Value.Text _end_element_id] ->
       return (Value.Relationship { rel_id; start_node_id; end_node_id; rel_type; rel_props })
   (* Bolt 4 and earlier: rel_id, start_node_id, end_node_id, type, props *)
   | [Value.Int rel_id; Value.Int start_node_id; Value.Int end_node_id; Value.Text rel_type; Value.Map rel_props] ->
       return (Value.Relationship { rel_id; start_node_id; end_node_id; rel_type; rel_props })
-  | _ -> decode_error "Invalid relationship structure"
+  | _ ->
+      let types = List.map (function
+        | Value.Text _ -> "Text"
+        | Value.Int _ -> "Int"
+        | Value.Map _ -> "Map"
+        | Value.Bool _ -> "Bool"
+        | Value.Float _ -> "Float"
+        | Value.List _ -> "List"
+        | _ -> "Other"
+      ) fields in
+      decode_error (Printf.sprintf "Invalid relationship structure: got [%s] with %d fields"
+        (String.concat "; " types) (List.length fields))
 
 and decode_unbound_relationship fields =
   match fields with
-  (* Bolt 5+ format: element_id, rel_id, type, props *)
-  | [Value.Text _element_id; Value.Int urel_id; Value.Text urel_type; Value.Map urel_props] ->
+  (* Bolt 5+ format (actual): rel_id, type, props, element_id *)
+  | [Value.Int urel_id; Value.Text urel_type; Value.Map urel_props; Value.Text _element_id] ->
       return (Value.UnboundRelationship { urel_id; urel_type; urel_props })
   (* Bolt 4 and earlier: rel_id, type, props *)
   | [Value.Int urel_id; Value.Text urel_type; Value.Map urel_props] ->
       return (Value.UnboundRelationship { urel_id; urel_type; urel_props })
-  | _ -> decode_error "Invalid unbound relationship structure"
+  | _ ->
+      let types = List.map (function
+        | Value.Text _ -> "Text"
+        | Value.Int _ -> "Int"
+        | Value.Map _ -> "Map"
+        | Value.Bool _ -> "Bool"
+        | Value.Float _ -> "Float"
+        | Value.List _ -> "List"
+        | _ -> "Other"
+      ) fields in
+      decode_error (Printf.sprintf "Invalid unbound relationship structure: got [%s] with %d fields"
+        (String.concat "; " types) (List.length fields))
 
 and decode_path fields =
   match fields with
