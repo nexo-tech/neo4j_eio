@@ -110,3 +110,9 @@
  (modules transact_test)
  (libraries neo4j_eio eio eio_main alcotest test_helper)
  (action (run %{exe:transact_test.exe})))
+
+(test
+ (name streaming_test)
+ (modules streaming_test)
+ (libraries neo4j_eio eio eio_main alcotest test_helper)
+ (action (run %{exe:streaming_test.exe})))

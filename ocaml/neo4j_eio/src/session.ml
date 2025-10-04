@@ -11,7 +11,94 @@ type 'a t = {
 let create flow version =
   { flow; version; mutex = Mutex.create (); closed = false }
 
-(* Execute a query with serialized access *)
+(* Stream type for lazy record consumption *)
+type stream = {
+  fetch_next: unit -> (Value.value list, Error.t) result;
+  mutable exhausted: bool;
+}
+
+(* Execute a query and return a stream for lazy consumption *)
+let run_stream t ~statement ?(parameters = Value.StringMap.empty) ?(fetch_size = 1000L) () =
+  if t.closed then
+    Error (Error.Protocol "Session is closed")
+  else
+    (* Send RUN immediately *)
+    Mutex.use_rw t.mutex ~protect:true (fun () ->
+      let run_msg = Protocol.build_run ~statement ~parameters () in
+      Connection.send_message t.flow run_msg;
+
+      (* Receive RUN response *)
+      match Connection.recv_response t.flow with
+      | Error e -> Error (Error.Protocol ("RUN decode failed: " ^ e))
+      | Ok (Value.Struct { signature = 0x70; _ }) ->
+          (* SUCCESS - create stream *)
+          let exhausted_ref = ref false in
+          let rec stream = {
+            fetch_next = (fun () ->
+              (* Check if already exhausted *)
+              if !exhausted_ref then
+                Ok []
+              else
+                Mutex.use_rw t.mutex ~protect:true (fun () ->
+                  (* Send PULL for next chunk *)
+                  let pull_msg = Protocol.build_pull ~n:(Some fetch_size) () in
+                  Connection.send_message t.flow pull_msg;
+
+                  (* Collect records from this PULL *)
+                  let rec collect_chunk acc =
+                    match Connection.recv_response t.flow with
+                    | Error e -> Error (Error.Protocol ("PULL decode failed: " ^ e))
+                    | Ok (Value.Struct { signature = 0x71; fields = [Value.List records] }) ->
+                        (* RECORD - continue collecting this chunk *)
+                        collect_chunk (records :: acc)
+                    | Ok (Value.Struct { signature = 0x70; fields = [Value.Map meta] }) ->
+                        (* SUCCESS - chunk complete *)
+                        let has_more = match Value.StringMap.find_opt "has_more" meta with
+                          | Some (Value.Bool b) -> b
+                          | _ -> false
+                        in
+                        exhausted_ref := not has_more;
+                        stream.exhausted <- not has_more;
+                        Ok (List.rev acc |> List.flatten)
+                    | Ok (Value.Struct { signature = 0x70; _ }) ->
+                        (* SUCCESS without metadata - stream exhausted *)
+                        exhausted_ref := true;
+                        stream.exhausted <- true;
+                        Ok (List.rev acc |> List.flatten)
+                    | Ok (Value.Struct { signature = 0x7F; fields }) ->
+                        (* FAILURE *)
+                        exhausted_ref := true;
+                        stream.exhausted <- true;
+                        let err = match fields with
+                        | Value.Map m :: _ -> Error.from_failure_map m
+                        | _ -> Error.Protocol "Query failed"
+                        in
+                        Error err
+                    | Ok _ ->
+                        exhausted_ref := true;
+                        stream.exhausted <- true;
+                        Error (Error.Protocol "Unexpected response during PULL")
+                  in
+                  collect_chunk []
+                )
+            );
+            exhausted = false;
+          }
+          in
+          Ok stream
+      | Ok (Value.Struct { signature = 0x7E; _ }) ->
+          Error (Error.Protocol "RUN was ignored - session in failed state")
+      | Ok (Value.Struct { signature = 0x7F; fields }) ->
+          let err = match fields with
+          | Value.Map m :: _ -> Error.from_failure_map m
+          | _ -> Error.Protocol "RUN failed"
+          in
+          Error err
+      | Ok _ ->
+          Error (Error.Protocol "Unexpected RUN response")
+    )
+
+(* Execute a query with serialized access - strict materialization *)
 let run t ~statement ?(parameters = Value.StringMap.empty) ?(fetch_size = -1L) () =
   if t.closed then
     Error (Error.Protocol "Session is closed")
@@ -87,6 +174,22 @@ let run t ~statement ?(parameters = Value.StringMap.empty) ?(fetch_size = -1L) (
       | Ok _ ->
           Error (Error.Protocol "Unexpected RUN response")
     )
+
+(* Helper to consume entire stream into a list *)
+let stream_to_list stream =
+  let rec collect acc =
+    if stream.exhausted then
+      Ok (List.rev acc |> List.flatten)
+    else
+      match stream.fetch_next () with
+      | Error e -> Error e
+      | Ok chunk ->
+          if List.length chunk = 0 && stream.exhausted then
+            Ok (List.rev acc |> List.flatten)
+          else
+            collect (chunk :: acc)
+  in
+  collect []
 
 (* Begin a transaction *)
 let begin_transaction t ?(metadata = Value.StringMap.empty) () =
