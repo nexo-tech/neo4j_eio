@@ -38,3 +38,9 @@
  (modules client_negotiate_test)
  (libraries neo4j_eio eio eio_main alcotest test_helper)
  (action (run %{exe:client_negotiate_test.exe})))
+
+(test
+ (name protocol_framing_test)
+ (modules protocol_framing_test)
+ (libraries neo4j_eio eio eio_main alcotest)
+ (action (run %{exe:protocol_framing_test.exe})))

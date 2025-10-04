@@ -12,3 +12,24 @@ val supports_logon : version -> bool   (* v5.x *)
 val uses_pull_discard : version -> bool (* v3+ *)
 val is_new_version : version -> bool   (* v3+ like hasbolt *)
 val pp_version : version -> string
+
+(* Chunked message framing *)
+val max_chunk_size : int
+val chunk_message : string -> string
+val dechunk_message : (int -> string) -> string
+
+(* Message codes *)
+type message_code =
+  | HELLO | GOODBYE | RESET | RUN | DISCARD | PULL
+  | BEGIN | COMMIT | ROLLBACK | LOGON
+
+val message_code_to_int : message_code -> int
+val message_code_of_int : int -> message_code option
+val pp_message_code : message_code -> string
+
+(* Response codes *)
+type response_code =
+  | SUCCESS | RECORD | IGNORED | FAILURE
+
+val response_code_of_int : int -> response_code option
+val pp_response_code : response_code -> string
