@@ -1,0 +1,26 @@
+opam-version: "2.0"
+name: "neo4j_eio"
+version: "dev"
+synopsis: "Neo4j Bolt client built on Eio (scaffold stage)"
+description: "Effects-based OCaml driver skeleton for Neo4j using Eio; includes Bolt handshake and test wiring."
+maintainer: "dev@example.com"
+authors: "Project Contributors"
+license: "MIT"
+homepage: ""
+bug-reports: ""
+depends: [
+  "ocaml" {>= "5.1"}
+  "dune" {>= "3.9"}
+  "eio" {>= "0.12"}
+  "cstruct" {>= "6.0.0"}
+  "angstrom" {>= "0.15.0"}
+  "bigstringaf" {>= "0.9.0"}
+  "alcotest" {with-test}
+  "eio_main" {with-test}
+]
+build: [
+  ["dune" "build" "-p" name "-j" jobs]
+]
+run-test: [
+  ["dune" "runtest" "-p" name "-j" jobs]
+]

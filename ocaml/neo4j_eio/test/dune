@@ -1,0 +1,28 @@
+(library
+ (name test_helper)
+ (modules test_helper)
+ (libraries neo4j_eio eio eio_main alcotest))
+
+(test
+ (name value_test)
+ (modules value_test)
+ (libraries neo4j_eio alcotest)
+ (action (run %{exe:value_test.exe})))
+
+(test
+ (name handshake_test)
+ (modules handshake_test)
+ (libraries neo4j_eio eio eio_main alcotest test_helper)
+ (action (run %{exe:handshake_test.exe})))
+
+(test
+ (name protocol_classify_test)
+ (modules protocol_classify_test)
+ (libraries neo4j_eio alcotest)
+ (action (run %{exe:protocol_classify_test.exe})))
+
+(test
+ (name client_negotiate_test)
+ (modules client_negotiate_test)
+ (libraries neo4j_eio eio eio_main alcotest test_helper)
+ (action (run %{exe:client_negotiate_test.exe})))

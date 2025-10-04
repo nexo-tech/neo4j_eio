@@ -1,0 +1,4 @@
+val handshake :
+  sw:Eio.Switch.t ->
+  net:_ Eio.Net.t ->
+  Config.t -> (Protocol.version, Error.t) result

@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    services:
+      neo4j:
+        image: neo4j:5
+        ports:
+          - 7474:7474
+          - 7687:7687
+        env:
+          NEO4J_AUTH: neo4j/test
+          NEO4J_PLUGINS: '["apoc"]'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for Neo4j service
+        run: |
+          for i in $(seq 1 120); do
+            if curl -fsS http://localhost:7474 > /dev/null; then
+              echo "Neo4j HTTP is up"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Set up OCaml
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: 5.2.1
+          dune-cache: true
+
+      - name: Install dependencies
+        run: opam install -y . --with-test
+        working-directory: ocaml/neo4j_eio
+
+      - name: Run tests
+        env:
+          NEO4J_HOST: localhost
+          NEO4J_PORT: 7687
+          NEO4J_USER: neo4j
+          NEO4J_PASSWORD: test
+        run: dune runtest -j 2
+        working-directory: ocaml/neo4j_eio
+
