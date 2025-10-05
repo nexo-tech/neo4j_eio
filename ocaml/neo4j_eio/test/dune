@@ -140,3 +140,9 @@
  (modules extract_test)
  (libraries neo4j_eio)
  (action (run %{exe:extract_test.exe})))
+
+(test
+ (name query_helper_test)
+ (modules query_helper_test)
+ (libraries neo4j_eio eio eio_main alcotest test_helper)
+ (action (run %{exe:query_helper_test.exe})))
