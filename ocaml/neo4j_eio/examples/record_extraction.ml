@@ -1,4 +1,4 @@
-(* Example: Using query_records for 100% hasbolt API parity *)
+(* Example: Using query for 100% hasbolt API parity *)
 
 open Neo4j_eio
 
@@ -13,7 +13,7 @@ let () =
       match Session.with_session ~sw ~net:env#net cfg (fun session ->
         (* Example 1: Extract single field using Value.at *)
         Printf.printf "Example 1: Extract single field by name\n";
-        (match Neo4j.query_records session
+        (match Neo4j.query session
            ~statement:"RETURN 42 AS answer"
            () with
          | Ok [record] ->
@@ -28,7 +28,7 @@ let () =
         (* Example 2: Extract multiple fields *)
         Printf.printf "\nExample 2: Extract multiple fields from one record\n";
         let open Neo4j in
-        (match query_records session
+        (match query session
            ~statement:"RETURN $name AS name, $age AS age, $active AS active"
            ~parameters:(props [
              "name" =: text "Alice";
@@ -56,7 +56,7 @@ let () =
 
         (* Example 3: Multiple records with field extraction *)
         Printf.printf "\nExample 3: Multiple records with named field access\n";
-        (match Neo4j.query_records session
+        (match Neo4j.query session
            ~statement:"UNWIND [1, 2, 3] AS x RETURN x AS number, x * 2 AS doubled"
            () with
          | Ok records ->
@@ -70,21 +70,22 @@ let () =
              Printf.printf "  ✓ Named field access on multiple records!\n"
          | Error e -> Printf.eprintf "  ✗ Query failed: %s\n" (Error.to_string e));
 
-        (* Example 4: Compare with old API (still works!) *)
-        Printf.printf "\nExample 4: Old API still works for backward compatibility\n";
+        (* Example 4: Unnamed fields (Neo4j generates default names) *)
+        Printf.printf "\nExample 4: Query without AS aliases\n";
         (match Neo4j.query session
            ~statement:"RETURN 1, 2, 3"
            () with
-         | Ok [Value.Int a; Value.Int b; Value.Int c] ->
-             Printf.printf "  Old API: values = %Ld, %Ld, %Ld\n" a b c;
-             Printf.printf "  ✓ Backward compatible!\n"
+         | Ok [_record] ->
+             (* Neo4j generates field names like "1", "2", "3" for unnamed columns *)
+             Printf.printf "  Note: Use AS to name your fields for better code!\n";
+             Printf.printf "  ✓ Query executed\n"
          | Ok _ -> Printf.printf "  ✗ Unexpected result\n"
          | Error e -> Printf.eprintf "  ✗ Query failed: %s\n" (Error.to_string e));
 
         Printf.printf "\nExample 5: New API with Node properties\n";
         let label = Printf.sprintf "Person_%d" (Random.int 1000000) in
         let open Neo4j in
-        (match query_records session
+        (match query session
            ~statement:(Printf.sprintf "CREATE (p:%s {name: $name, age: $age}) RETURN p.name AS name, p.age AS age" label)
            ~parameters:(props [
              "name" =: text "Bob";

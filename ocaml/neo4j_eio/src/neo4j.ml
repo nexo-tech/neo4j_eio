@@ -26,7 +26,7 @@ let query session ~statement ?parameters () =
     | None -> Value.StringMap.empty
     | Some p -> p
   in
-  Session.run session ~statement ~parameters:params ()
+  Session.run_records session ~statement ~parameters:params ()
 
 (* Execute a Cypher query, optionally with parameters, ignoring results *)
 let query_ session ~statement ?parameters () =
@@ -34,14 +34,6 @@ let query_ session ~statement ?parameters () =
   | Ok _ -> Ok ()
   | Error e -> Error e
 
-(* Execute a Cypher query, returning records with named fields *)
-let query_records session ~statement ?parameters () =
-  let params = match parameters with
-    | None -> Value.StringMap.empty
-    | Some p -> p
-  in
-  Session.run_records session ~statement ~parameters:params ()
-
-(* Legacy aliases for compatibility *)
+(* Legacy aliases for compatibility - will be removed *)
 let query_p = query
 let query_p_ = query_

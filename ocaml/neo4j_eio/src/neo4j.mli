@@ -24,9 +24,10 @@ val query :
   statement:string ->
   ?parameters:Value.value Value.StringMap.t ->
   unit ->
-  (Value.value list, Error.t) result
-(* Execute a Cypher query, optionally with parameters, returning all records.
-   Example: query session ~statement:"RETURN $n" ~parameters:(props ["n" =: int 42L]) () *)
+  (Value.record list, Error.t) result
+(* Execute a Cypher query, optionally with parameters, returning records with named fields.
+   Use Value.at to extract field values by name.
+   Example: query session ~statement:"RETURN $n AS answer" ~parameters:(props ["n" =: int 42L]) () *)
 
 val query_ :
   [> `Flow | `R | `W ] Eio.Resource.t Session.t ->
@@ -37,26 +38,13 @@ val query_ :
 (* Execute a Cypher query, optionally with parameters, ignoring results.
    Example: query_ session ~statement:"CREATE (n {name: $name})" ~parameters:(props ["name" =: text "Alice"]) () *)
 
-val query_records :
-  [> `Flow | `R | `W ] Eio.Resource.t Session.t ->
-  statement:string ->
-  ?parameters:Value.value Value.StringMap.t ->
-  unit ->
-  (Value.record list, Error.t) result
-(* Execute a Cypher query, optionally with parameters, returning records with named fields.
-   Use Value.at to extract field values by name.
-   Example: query_records session ~statement:"RETURN 42 AS n" () >>= fun records ->
-            match records with
-            | [rec] -> Value.at rec "n"
-            | _ -> None *)
-
-(* Legacy aliases for backward compatibility *)
+(* Legacy aliases for backward compatibility - will be removed *)
 val query_p :
   [> `Flow | `R | `W ] Eio.Resource.t Session.t ->
   statement:string ->
   ?parameters:Value.value Value.StringMap.t ->
   unit ->
-  (Value.value list, Error.t) result
+  (Value.record list, Error.t) result
 
 val query_p_ :
   [> `Flow | `R | `W ] Eio.Resource.t Session.t ->

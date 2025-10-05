@@ -35,12 +35,16 @@ let test_parameter_substitution env cfg =
       match query_p session ~statement:match_stmt
         ~parameters:(props ["name" =: Value.text "Alice"]) () with
       | Error e -> Error e
-      | Ok [Value.Int age] ->
-          Alcotest.(check int64) "age parameter roundtrip" 30L age;
+      | Ok [record] ->
+          (match Value.at record "age" with
+           | Some (Value.Int age) ->
+               Alcotest.(check int64) "age parameter roundtrip" 30L age;
 
-          (* Cleanup *)
-          let delete_stmt = Printf.sprintf "MATCH (n:%s) DELETE n" unique_label in
-          query_ session ~statement:delete_stmt ()
+               (* Cleanup *)
+               let delete_stmt = Printf.sprintf "MATCH (n:%s) DELETE n" unique_label in
+               query_ session ~statement:delete_stmt ()
+           | _ ->
+               Error (Error.Protocol "Unexpected value type for age"))
       | Ok values ->
           Error (Error.Protocol (Printf.sprintf "Unexpected values: got %d values" (List.length values)))
     ) with
@@ -61,24 +65,27 @@ let test_node_decode env cfg =
 
       match query session ~statement:create_stmt () with
       | Error e -> Error e
-      | Ok [Value.Node node] ->
-          (* Verify node structure *)
-          Alcotest.(check bool) "node has labels" true (List.length node.labels >= 1);
-          Alcotest.(check bool) "node has Person label" true
-            (List.mem "Person" node.labels);
+      | Ok [record] ->
+          (match Value.at record "n" with
+           | Some (Value.Node node) ->
+               (* Verify node structure *)
+               Alcotest.(check bool) "node has labels" true (List.length node.labels >= 1);
+               Alcotest.(check bool) "node has Person label" true
+                 (List.mem "Person" node.labels);
 
-          (* Verify properties *)
-          (match Value.StringMap.find_opt "name" node.props with
-           | Some (Value.Text "Bob") -> ()
-           | _ -> Alcotest.fail "Node name property incorrect");
+               (* Verify properties *)
+               (match Value.StringMap.find_opt "name" node.props with
+                | Some (Value.Text "Bob") -> ()
+                | _ -> Alcotest.fail "Node name property incorrect");
 
-          (match Value.StringMap.find_opt "age" node.props with
-           | Some (Value.Int 25L) -> ()
-           | _ -> Alcotest.fail "Node age property incorrect");
+               (match Value.StringMap.find_opt "age" node.props with
+                | Some (Value.Int 25L) -> ()
+                | _ -> Alcotest.fail "Node age property incorrect");
 
-          (* Cleanup *)
-          let delete_stmt = Printf.sprintf "MATCH (n:%s) DELETE n" unique_label in
-          query_ session ~statement:delete_stmt ()
+               (* Cleanup *)
+               let delete_stmt = Printf.sprintf "MATCH (n:%s) DELETE n" unique_label in
+               query_ session ~statement:delete_stmt ()
+           | _ -> Error (Error.Protocol "Expected Node value"))
       | Ok values ->
           Error (Error.Protocol (Printf.sprintf "Expected Node, got %d values" (List.length values)))
     ) with
@@ -99,20 +106,23 @@ let test_relationship_decode env cfg =
 
       match query session ~statement:create_stmt () with
       | Error e -> Error e
-      | Ok [Value.Relationship rel] ->
-          (* Verify relationship structure *)
-          Alcotest.(check string) "relationship type" "KNOWS" rel.rel_type;
-          Alcotest.(check bool) "has start and end nodes" true
-            (rel.start_node_id > 0L && rel.end_node_id > 0L);
+      | Ok [record] ->
+          (match Value.at record "r" with
+           | Some (Value.Relationship rel) ->
+               (* Verify relationship structure *)
+               Alcotest.(check string) "relationship type" "KNOWS" rel.rel_type;
+               Alcotest.(check bool) "has start and end nodes" true
+                 (rel.start_node_id > 0L && rel.end_node_id > 0L);
 
-          (* Verify properties *)
-          (match Value.StringMap.find_opt "since" rel.rel_props with
-           | Some (Value.Int 2020L) -> ()
-           | _ -> Alcotest.fail "Relationship since property incorrect");
+               (* Verify properties *)
+               (match Value.StringMap.find_opt "since" rel.rel_props with
+                | Some (Value.Int 2020L) -> ()
+                | _ -> Alcotest.fail "Relationship since property incorrect");
 
-          (* Cleanup *)
-          let delete_stmt = Printf.sprintf "MATCH (n:%s) DETACH DELETE n" unique_label in
-          query_ session ~statement:delete_stmt ()
+               (* Cleanup *)
+               let delete_stmt = Printf.sprintf "MATCH (n:%s) DETACH DELETE n" unique_label in
+               query_ session ~statement:delete_stmt ()
+           | _ -> Error (Error.Protocol "Expected Relationship value"))
       | Ok values ->
           Error (Error.Protocol (Printf.sprintf "Expected Relationship, got %d values" (List.length values)))
     ) with
@@ -133,25 +143,28 @@ let test_path_decode env cfg =
 
       match query session ~statement:create_stmt () with
       | Error e -> Error e
-      | Ok [Value.Path path] ->
-          (* Verify path structure *)
-          Alcotest.(check int) "path has 3 nodes" 3 (List.length path.path_nodes);
-          Alcotest.(check int) "path has 2 relationships" 2 (List.length path.path_rels);
+      | Ok [record] ->
+          (match Value.at record "p" with
+           | Some (Value.Path path) ->
+               (* Verify path structure *)
+               Alcotest.(check int) "path has 3 nodes" 3 (List.length path.path_nodes);
+               Alcotest.(check int) "path has 2 relationships" 2 (List.length path.path_rels);
 
-          (* Verify first and last nodes *)
-          (match path.path_nodes with
-           | first :: _ :: last :: [] ->
-               (match Value.StringMap.find_opt "name" first.props with
-                | Some (Value.Text "A") -> ()
-                | _ -> Alcotest.fail "First node name incorrect");
-               (match Value.StringMap.find_opt "name" last.props with
-                | Some (Value.Text "C") -> ()
-                | _ -> Alcotest.fail "Last node name incorrect")
-           | _ -> Alcotest.fail "Path structure incorrect");
+               (* Verify first and last nodes *)
+               (match path.path_nodes with
+                | first :: _ :: last :: [] ->
+                    (match Value.StringMap.find_opt "name" first.props with
+                     | Some (Value.Text "A") -> ()
+                     | _ -> Alcotest.fail "First node name incorrect");
+                    (match Value.StringMap.find_opt "name" last.props with
+                     | Some (Value.Text "C") -> ()
+                     | _ -> Alcotest.fail "Last node name incorrect")
+                | _ -> Alcotest.fail "Path structure incorrect");
 
-          (* Cleanup *)
-          let delete_stmt = Printf.sprintf "MATCH (n:%s) DETACH DELETE n" unique_label in
-          query_ session ~statement:delete_stmt ()
+               (* Cleanup *)
+               let delete_stmt = Printf.sprintf "MATCH (n:%s) DETACH DELETE n" unique_label in
+               query_ session ~statement:delete_stmt ()
+           | _ -> Error (Error.Protocol "Expected Path value"))
       | Ok values ->
           Error (Error.Protocol (Printf.sprintf "Expected Path, got %d values" (List.length values)))
     ) with
@@ -166,12 +179,15 @@ let test_point2d_type env cfg =
       (* Create a 2D point (Cartesian) *)
       match query session ~statement:"RETURN point({x: 3.0, y: 4.0}) AS p" () with
       | Error e -> Error e
-      | Ok [Value.Point2D point] ->
-          (* Verify point structure - Cartesian SRID is 7203 *)
-          Alcotest.(check bool) "has valid SRID" true (point.srid > 0L);
-          Alcotest.(check (float 0.001)) "x coordinate" 3.0 point.x;
-          Alcotest.(check (float 0.001)) "y coordinate" 4.0 point.y;
-          Ok ()
+      | Ok [record] ->
+          (match Value.at record "p" with
+           | Some (Value.Point2D point) ->
+               (* Verify point structure - Cartesian SRID is 7203 *)
+               Alcotest.(check bool) "has valid SRID" true (point.srid > 0L);
+               Alcotest.(check (float 0.001)) "x coordinate" 3.0 point.x;
+               Alcotest.(check (float 0.001)) "y coordinate" 4.0 point.y;
+               Ok ()
+           | _ -> Error (Error.Protocol "Expected Point2D value"))
       | Ok values ->
           Error (Error.Protocol (Printf.sprintf "Expected Point2D, got %d values" (List.length values)))
     ) with
@@ -186,13 +202,16 @@ let test_point3d_type env cfg =
       (* Create a 3D point (Cartesian) *)
       match query session ~statement:"RETURN point({x: 3.0, y: 4.0, z: 5.0}) AS p" () with
       | Error e -> Error e
-      | Ok [Value.Point3D point] ->
-          (* Verify point structure - Cartesian 3D SRID is 9157 *)
-          Alcotest.(check bool) "has valid SRID" true (point.srid > 0L);
-          Alcotest.(check (float 0.001)) "x coordinate" 3.0 point.x;
-          Alcotest.(check (float 0.001)) "y coordinate" 4.0 point.y;
-          Alcotest.(check (float 0.001)) "z coordinate" 5.0 point.z;
-          Ok ()
+      | Ok [record] ->
+          (match Value.at record "p" with
+           | Some (Value.Point3D point) ->
+               (* Verify point structure - Cartesian 3D SRID is 9157 *)
+               Alcotest.(check bool) "has valid SRID" true (point.srid > 0L);
+               Alcotest.(check (float 0.001)) "x coordinate" 3.0 point.x;
+               Alcotest.(check (float 0.001)) "y coordinate" 4.0 point.y;
+               Alcotest.(check (float 0.001)) "z coordinate" 5.0 point.z;
+               Ok ()
+           | _ -> Error (Error.Protocol "Expected Point3D value"))
       | Ok values ->
           Error (Error.Protocol (Printf.sprintf "Expected Point3D, got %d values" (List.length values)))
     ) with
@@ -207,12 +226,15 @@ let test_duration_type env cfg =
       (* Create a duration: 1 year, 2 months, 3 days, 4 hours *)
       match query session ~statement:"RETURN duration({years: 1, months: 2, days: 3, hours: 4}) AS d" () with
       | Error e -> Error e
-      | Ok [Value.Duration duration] ->
-          (* Verify duration structure - years converted to months *)
-          Alcotest.(check int64) "months (1 year + 2 months)" 14L duration.months;
-          Alcotest.(check int64) "days" 3L duration.days;
-          Alcotest.(check int64) "seconds (4 hours)" (Int64.of_int (4 * 3600)) duration.seconds;
-          Ok ()
+      | Ok [record] ->
+          (match Value.at record "d" with
+           | Some (Value.Duration duration) ->
+               (* Verify duration structure - years converted to months *)
+               Alcotest.(check int64) "months (1 year + 2 months)" 14L duration.months;
+               Alcotest.(check int64) "days" 3L duration.days;
+               Alcotest.(check int64) "seconds (4 hours)" (Int64.of_int (4 * 3600)) duration.seconds;
+               Ok ()
+           | _ -> Error (Error.Protocol "Expected Duration value"))
       | Ok values ->
           Error (Error.Protocol (Printf.sprintf "Expected Duration, got %d values" (List.length values)))
     ) with
@@ -227,10 +249,13 @@ let test_date_type env cfg =
       (* Create a date *)
       match query session ~statement:"RETURN date('2023-01-15') AS d" () with
       | Error e -> Error e
-      | Ok [Value.Date date] ->
-          (* Date is stored as days since Unix epoch (1970-01-01) *)
-          Alcotest.(check bool) "has positive days since epoch" true (date.days_since_epoch > 0L);
-          Ok ()
+      | Ok [record] ->
+          (match Value.at record "d" with
+           | Some (Value.Date date) ->
+               (* Date is stored as days since Unix epoch (1970-01-01) *)
+               Alcotest.(check bool) "has positive days since epoch" true (date.days_since_epoch > 0L);
+               Ok ()
+           | _ -> Error (Error.Protocol "Expected Date value"))
       | Ok values ->
           Error (Error.Protocol (Printf.sprintf "Expected Date, got %d values" (List.length values)))
     ) with
@@ -245,10 +270,13 @@ let test_local_time_type env cfg =
       (* Create a local time *)
       match query session ~statement:"RETURN localtime('12:30:45') AS t" () with
       | Error e -> Error e
-      | Ok [Value.LocalTime time] ->
-          (* LocalTime is stored as nanoseconds since midnight *)
-          Alcotest.(check bool) "has positive nanoseconds" true (time.nanoseconds_since_midnight > 0L);
-          Ok ()
+      | Ok [record] ->
+          (match Value.at record "t" with
+           | Some (Value.LocalTime time) ->
+               (* LocalTime is stored as nanoseconds since midnight *)
+               Alcotest.(check bool) "has positive nanoseconds" true (time.nanoseconds_since_midnight > 0L);
+               Ok ()
+           | _ -> Error (Error.Protocol "Expected LocalTime value"))
       | Ok values ->
           Error (Error.Protocol (Printf.sprintf "Expected LocalTime, got %d values" (List.length values)))
     ) with
@@ -263,11 +291,14 @@ let test_time_type env cfg =
       (* Create a time with timezone offset *)
       match query session ~statement:"RETURN time('12:30:45+01:00') AS t" () with
       | Error e -> Error e
-      | Ok [Value.Time time] ->
-          (* Time includes timezone offset in seconds *)
-          Alcotest.(check bool) "has positive nanoseconds" true (time.nanoseconds_since_midnight > 0L);
-          Alcotest.(check int64) "has timezone offset (3600s = +01:00)" 3600L time.timezone_offset_seconds;
-          Ok ()
+      | Ok [record] ->
+          (match Value.at record "t" with
+           | Some (Value.Time time) ->
+               (* Time includes timezone offset in seconds *)
+               Alcotest.(check bool) "has positive nanoseconds" true (time.nanoseconds_since_midnight > 0L);
+               Alcotest.(check int64) "has timezone offset (3600s = +01:00)" 3600L time.timezone_offset_seconds;
+               Ok ()
+           | _ -> Error (Error.Protocol "Expected Time value"))
       | Ok values ->
           Error (Error.Protocol (Printf.sprintf "Expected Time, got %d values" (List.length values)))
     ) with
@@ -282,10 +313,13 @@ let test_local_datetime_type env cfg =
       (* Create a local datetime *)
       match query session ~statement:"RETURN localdatetime('2023-01-15T12:30:45') AS dt" () with
       | Error e -> Error e
-      | Ok [Value.LocalDateTime dt] ->
-          (* LocalDateTime is stored as seconds + nanoseconds since Unix epoch *)
-          Alcotest.(check bool) "has positive seconds since epoch" true (dt.seconds_since_epoch > 0L);
-          Ok ()
+      | Ok [record] ->
+          (match Value.at record "dt" with
+           | Some (Value.LocalDateTime dt) ->
+               (* LocalDateTime is stored as seconds + nanoseconds since Unix epoch *)
+               Alcotest.(check bool) "has positive seconds since epoch" true (dt.seconds_since_epoch > 0L);
+               Ok ()
+           | _ -> Error (Error.Protocol "Expected LocalDateTime value"))
       | Ok values ->
           Error (Error.Protocol (Printf.sprintf "Expected LocalDateTime, got %d values" (List.length values)))
     ) with
@@ -300,17 +334,21 @@ let test_datetime_offset_type env cfg =
       (* Create a datetime with timezone offset *)
       match query session ~statement:"RETURN datetime('2023-01-15T12:30:45+01:00') AS dt" () with
       | Error e -> Error e
-      | Ok [Value.DateTimeOffset dt] ->
-          (* Verify datetime structure *)
-          Alcotest.(check bool) "has positive seconds since epoch" true (dt.seconds_since_epoch > 0L);
-          Alcotest.(check int64) "has timezone offset (3600s = +01:00)" 3600L dt.timezone_offset_seconds;
-          Ok ()
-      | Ok [Value.DateTimeZoneId dt] ->
-          (* Neo4j might return as zone ID format - that's acceptable *)
-          Alcotest.(check bool) "has positive seconds since epoch" true (dt.seconds_since_epoch > 0L);
-          Ok ()
-      | Ok [v] ->
-          Error (Error.Protocol (Printf.sprintf "Unexpected type: %s" (Format.asprintf "%a" Value.pp_value v)))
+      | Ok [record] ->
+          (match Value.at record "dt" with
+           | Some (Value.DateTimeOffset dt) ->
+               (* Verify datetime structure *)
+               Alcotest.(check bool) "has positive seconds since epoch" true (dt.seconds_since_epoch > 0L);
+               Alcotest.(check int64) "has timezone offset (3600s = +01:00)" 3600L dt.timezone_offset_seconds;
+               Ok ()
+           | Some (Value.DateTimeZoneId dt) ->
+               (* Neo4j might return as zone ID format - that's acceptable *)
+               Alcotest.(check bool) "has positive seconds since epoch" true (dt.seconds_since_epoch > 0L);
+               Ok ()
+           | Some v ->
+               Error (Error.Protocol (Printf.sprintf "Unexpected type: %s" (Format.asprintf "%a" Value.pp_value v)))
+           | None ->
+               Error (Error.Protocol "Field 'dt' not found"))
       | Ok values ->
           Error (Error.Protocol (Printf.sprintf "Expected 1 value, got %d" (List.length values)))
     ) with
@@ -325,17 +363,21 @@ let test_datetime_zone_id_type env cfg =
       (* Create a datetime with timezone name *)
       match query session ~statement:"RETURN datetime('2023-01-15T12:30:45[Europe/London]') AS dt" () with
       | Error e -> Error e
-      | Ok [Value.DateTimeZoneId dt] ->
-          (* Verify datetime structure *)
-          Alcotest.(check bool) "has positive seconds since epoch" true (dt.seconds_since_epoch > 0L);
-          Alcotest.(check string) "has timezone ID" "Europe/London" dt.timezone_id;
-          Ok ()
-      | Ok [Value.DateTimeOffset dt] ->
-          (* Neo4j might return as offset format - that's acceptable *)
-          Alcotest.(check bool) "has positive seconds since epoch" true (dt.seconds_since_epoch > 0L);
-          Ok ()
-      | Ok [v] ->
-          Error (Error.Protocol (Printf.sprintf "Unexpected type: %s" (Format.asprintf "%a" Value.pp_value v)))
+      | Ok [record] ->
+          (match Value.at record "dt" with
+           | Some (Value.DateTimeZoneId dt) ->
+               (* Verify datetime structure *)
+               Alcotest.(check bool) "has positive seconds since epoch" true (dt.seconds_since_epoch > 0L);
+               Alcotest.(check string) "has timezone ID" "Europe/London" dt.timezone_id;
+               Ok ()
+           | Some (Value.DateTimeOffset dt) ->
+               (* Neo4j might return as offset format - that's acceptable *)
+               Alcotest.(check bool) "has positive seconds since epoch" true (dt.seconds_since_epoch > 0L);
+               Ok ()
+           | Some v ->
+               Error (Error.Protocol (Printf.sprintf "Unexpected type: %s" (Format.asprintf "%a" Value.pp_value v)))
+           | None ->
+               Error (Error.Protocol "Field 'dt' not found"))
       | Ok values ->
           Error (Error.Protocol (Printf.sprintf "Expected 1 value, got %d" (List.length values)))
     ) with
@@ -386,9 +428,12 @@ let test_transaction_rollback_on_error env cfg =
        let match_stmt = Printf.sprintf "MATCH (n:%s) RETURN count(n) AS cnt" unique_label in
        match query session ~statement:match_stmt () with
        | Error e -> Error e
-       | Ok [Value.Int 0L] -> Ok ()
-       | Ok [Value.Int n] ->
-           Error (Error.Protocol (Printf.sprintf "Expected 0 nodes after rollback, got %Ld" n))
+       | Ok [record] ->
+           (match Value.at record "cnt" with
+            | Some (Value.Int 0L) -> Ok ()
+            | Some (Value.Int n) ->
+                Error (Error.Protocol (Printf.sprintf "Expected 0 nodes after rollback, got %Ld" n))
+            | _ -> Error (Error.Protocol "Expected Int value for count"))
        | Ok values ->
            Error (Error.Protocol (Printf.sprintf "Unexpected result: %d values" (List.length values))))
     ) with
@@ -422,12 +467,15 @@ let test_transaction_commit_success env cfg =
        let match_stmt = Printf.sprintf "MATCH (n:%s) RETURN count(n) AS cnt" unique_label in
        match query session ~statement:match_stmt () with
        | Error e -> Error e
-       | Ok [Value.Int 1L] ->
-           (* Cleanup *)
-           let delete_stmt = Printf.sprintf "MATCH (n:%s) DELETE n" unique_label in
-           query_ session ~statement:delete_stmt ()
-       | Ok [Value.Int n] ->
-           Error (Error.Protocol (Printf.sprintf "Expected 1 node after commit, got %Ld" n))
+       | Ok [record] ->
+           (match Value.at record "cnt" with
+            | Some (Value.Int 1L) ->
+                (* Cleanup *)
+                let delete_stmt = Printf.sprintf "MATCH (n:%s) DELETE n" unique_label in
+                query_ session ~statement:delete_stmt ()
+            | Some (Value.Int n) ->
+                Error (Error.Protocol (Printf.sprintf "Expected 1 node after commit, got %Ld" n))
+            | _ -> Error (Error.Protocol "Expected Int value for count"))
        | Ok values ->
            Error (Error.Protocol (Printf.sprintf "Unexpected result: %d values" (List.length values))))
     ) with

@@ -9,20 +9,16 @@ let test_query_with_record_decoding env cfg =
       match query session
         ~statement:"RETURN 'Alice' AS name, 30 AS age, true AS active"
         () with
-      | Ok values ->
-          (* The query returns flat values, but we can convert them to a record *)
-          (* For now, we'll verify we get 3 values back *)
-          if List.length values <> 3 then
-            Error (Error.Protocol "Expected 3 values")
-          else
-            (* Verify the types are correct *)
-            (match values with
-             | [Value.Text name; Value.Int age; Value.Bool active] ->
-                 if name = "Alice" && age = 30L && active = true then
-                   Ok ()
-                 else
-                   Error (Error.Protocol "Unexpected values")
-             | _ -> Error (Error.Protocol "Unexpected value types"))
+      | Ok [record] ->
+          (* Now the query returns records with named fields *)
+          (match Value.at record "name", Value.at record "age", Value.at record "active" with
+           | Some (Value.Text name), Some (Value.Int age), Some (Value.Bool active) ->
+               if name = "Alice" && age = 30L && active = true then
+                 Ok ()
+               else
+                 Error (Error.Protocol "Unexpected values")
+           | _ -> Error (Error.Protocol "Unexpected value types"))
+      | Ok _ -> Error (Error.Protocol "Expected single record")
       | Error e -> Error e
     ) with
     | Ok () -> ()

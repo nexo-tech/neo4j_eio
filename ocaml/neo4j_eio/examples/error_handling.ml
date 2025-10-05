@@ -75,9 +75,13 @@ let example_error_recovery session =
 
   (* Second query should work immediately (auto-reset done) *)
   match Neo4j.query session ~statement:"RETURN 42 AS answer" () with
-  | Ok [Value.Int n] ->
-      Printf.printf "  ✓ Next query works immediately, got: %Ld\n" n;
-      Printf.printf "  ✓ No manual reset needed!\n"
+  | Ok [record] ->
+      (match Value.at record "answer" with
+       | Some (Value.Int n) ->
+           Printf.printf "  ✓ Next query works immediately, got: %Ld\n" n;
+           Printf.printf "  ✓ No manual reset needed!\n"
+       | _ ->
+           Printf.printf "  ✗ Unexpected value type\n")
   | Ok _ ->
       Printf.printf "  ✗ Unexpected result format\n"
   | Error e ->
@@ -96,28 +100,32 @@ let example_missing_property session =
     () with
   | Error e ->
       Printf.eprintf "  ✗ Create failed: %s\n" (Error.to_string e)
-  | Ok [Value.Node node] ->
-      (* Try to access missing property *)
-      (match Value.StringMap.find_opt "age" node.props with
-       | Some (Value.Int age) ->
-           Printf.printf "  Age: %Ld\n" age
-       | Some _ ->
-           Printf.printf "  ✗ Age exists but wrong type\n"
-       | None ->
-           Printf.printf "  ✓ Missing property handled gracefully (None)\n");
+  | Ok [record] ->
+      (match Value.at record "n" with
+       | Some (Value.Node node) ->
+           (* Try to access missing property *)
+           (match Value.StringMap.find_opt "age" node.props with
+            | Some (Value.Int age) ->
+                Printf.printf "  Age: %Ld\n" age
+            | Some _ ->
+                Printf.printf "  ✗ Age exists but wrong type\n"
+            | None ->
+                Printf.printf "  ✓ Missing property handled gracefully (None)\n");
 
-      (* Access existing property *)
-      (match Value.StringMap.find_opt "name" node.props with
-       | Some (Value.Text name) ->
-           Printf.printf "  ✓ Existing property retrieved: %s\n" name
+           (* Access existing property *)
+           (match Value.StringMap.find_opt "name" node.props with
+            | Some (Value.Text name) ->
+                Printf.printf "  ✓ Existing property retrieved: %s\n" name
+            | _ ->
+                Printf.printf "  ✗ Failed to get name\n");
+
+           (* Cleanup *)
+           let _ = query_ session
+             ~statement:(Printf.sprintf "MATCH (n:%s) DELETE n" label)
+             () in
+           Printf.printf "  ✓ Property access patterns demonstrated\n"
        | _ ->
-           Printf.printf "  ✗ Failed to get name\n");
-
-      (* Cleanup *)
-      let _ = query_ session
-        ~statement:(Printf.sprintf "MATCH (n:%s) DELETE n" label)
-        () in
-      Printf.printf "  ✓ Property access patterns demonstrated\n"
+           Printf.printf "  ✗ Unexpected value type\n")
   | Ok _ ->
       Printf.printf "  ✗ Unexpected result format\n"
 
@@ -128,11 +136,15 @@ let example_type_mismatch session =
   match Neo4j.query session
     ~statement:"RETURN 'not a number' AS value"
     () with
-  | Ok [Value.Int _n] ->
-      Printf.printf "  ✗ Incorrectly matched as Int\n"
-  | Ok [Value.Text s] ->
-      Printf.printf "  ✓ Correctly matched as Text: %s\n" s;
-      Printf.printf "  ✓ Pattern matching prevents type errors\n"
+  | Ok [record] ->
+      (match Value.at record "value" with
+       | Some (Value.Int _n) ->
+           Printf.printf "  ✗ Incorrectly matched as Int\n"
+       | Some (Value.Text s) ->
+           Printf.printf "  ✓ Correctly matched as Text: %s\n" s;
+           Printf.printf "  ✓ Pattern matching prevents type errors\n"
+       | _ ->
+           Printf.printf "  ✗ Unexpected value type\n")
   | Ok _ ->
       Printf.printf "  ✗ Unexpected result format\n"
   | Error e ->
@@ -159,12 +171,18 @@ let example_defensive_handling session =
 
   let handle_query_result result =
     match result with
-    | Ok [Value.Int n] ->
-        Printf.printf "  Got single integer: %Ld\n" n;
-        Ok ()
-    | Ok [Value.Text s] ->
-        Printf.printf "  Got single text: %s\n" s;
-        Ok ()
+    | Ok [record] ->
+        (* Try to extract as int first, then text *)
+        (match Value.at record (List.hd (Value.StringMap.bindings record) |> fst) with
+         | Some (Value.Int n) ->
+             Printf.printf "  Got single integer: %Ld\n" n;
+             Ok ()
+         | Some (Value.Text s) ->
+             Printf.printf "  Got single text: %s\n" s;
+             Ok ()
+         | _ ->
+             Printf.printf "  Got unexpected value type\n";
+             Ok ())
     | Ok [] ->
         Printf.printf "  Empty result\n";
         Ok ()
