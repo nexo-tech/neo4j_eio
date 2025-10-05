@@ -206,3 +206,9 @@
  (modules query_builder_test)
  (libraries neo4j_eio eio eio_main alcotest test_helper)
  (action (run %{exe:query_builder_test.exe})))
+
+(test
+ (name transaction_dsl_test)
+ (modules transaction_dsl_test)
+ (libraries neo4j_eio eio eio_main alcotest test_helper)
+ (action (run %{exe:transaction_dsl_test.exe})))
