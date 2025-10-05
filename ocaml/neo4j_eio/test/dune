@@ -194,3 +194,9 @@
  (modules lens_test)
  (libraries neo4j_eio eio eio_main alcotest test_helper)
  (action (run %{exe:lens_test.exe})))
+
+(test
+ (name traversal_test)
+ (modules traversal_test)
+ (libraries neo4j_eio eio eio_main alcotest test_helper)
+ (action (run %{exe:traversal_test.exe})))

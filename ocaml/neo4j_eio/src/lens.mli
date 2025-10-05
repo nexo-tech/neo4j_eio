@@ -24,7 +24,7 @@
 
 (** A getter that extracts values of type ['a] from ['s].
     This is a simplified version suitable for read-only access. *)
-type ('s, 'a) t
+type ('s, 'a) t = 's -> 'a option
 
 (** {1 Construction} *)
 
