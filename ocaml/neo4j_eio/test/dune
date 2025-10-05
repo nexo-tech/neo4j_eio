@@ -170,3 +170,9 @@
  (modules cypher_execution_test)
  (libraries neo4j_eio eio eio_main alcotest test_helper)
  (action (run %{exe:cypher_execution_test.exe})))
+
+(test
+ (name pipeline_test)
+ (modules pipeline_test)
+ (libraries neo4j_eio eio eio_main alcotest test_helper)
+ (action (run %{exe:pipeline_test.exe})))

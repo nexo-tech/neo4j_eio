@@ -47,3 +47,8 @@
  (name cypher_fluent_api)
  (modules cypher_fluent_api)
  (libraries neo4j_eio eio eio_main))
+
+(executable
+ (name pipeline_operators)
+ (modules pipeline_operators)
+ (libraries neo4j_eio eio eio_main))

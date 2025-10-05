@@ -163,6 +163,20 @@ let run_exn query session =
       let msg = Format.asprintf "Cypher.run_exn: %s" (Error.to_string e) in
       failwith msg
 
+(* Pipeline-friendly execution - curried session parameter *)
+
+let execute session query = run query session
+
+let execute_exn session query = run_exn query session
+
+(* Pipeline operator for execution *)
+let (|>>) query session = run query session
+
+(* Convenient alias for pipeline execution *)
+let run_in session query = run query session
+
+let run_in_exn session query = run_exn query session
+
 (* Transaction support *)
 
 let in_transaction f =
