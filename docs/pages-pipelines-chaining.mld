@@ -1,0 +1,68 @@
+{0 chaining}
+
+{v
+# Chaining Operations
+
+The `Cypher` fluent API supports chaining multiple stages: build a query, decode with `Extract`, transform results, and execute. It also supports monadic/applicative composition for combining multiple pipelines.
+
+Core chaining patterns
+- Linear chaining with `|>`:
+```ocaml
+let q = Cypher.(
+  query "RETURN 1 AS n, 'x' AS s"
+  |> extract Extract.(let+ n = int "n" and+ s = text "s" in (n, s))
+  |> expect_one
+)
+let result = Cypher.run_in session q
+```
+
+- Execute variants:
+  - `run_in session q`, `execute session q` → `('a, Error.t) result`
+  - `run_in_exn session q`, `execute_exn session q` → raise on error
+  - Operator: `q |>> session`
+
+- Bind/let* to sequence dependent pipelines:
+```ocaml
+let q = Cypher.(
+  let* first =
+    query "RETURN 2 AS a"
+    |> extract Extract.(int "a")
+    |> expect_one
+  in
+  query "RETURN 3 AS b"
+  |> extract Extract.(int "b")
+  |> expect_one
+  |> map (fun b -> Int64.add first b)
+)
+let sum = Cypher.run_in_exn session q
+```
+
+- Applicative `and+` to combine independent results:
+```ocaml
+let q = Cypher.(
+  let+ a = query "RETURN 1 AS a" |> extract Extract.(int "a") |> expect_one
+  and+ b = query "RETURN 2 AS b" |> extract Extract.(int "b") |> expect_one in
+  Int64.add a b
+)
+let sum = Cypher.run_in_exn session q
+```
+
+- Sequencing multiple pipelines:
+```ocaml
+let results = Cypher.(
+  sequence [
+    query "RETURN 1 AS x" |> extract Extract.(int "x");
+    query "RETURN 2 AS x" |> extract Extract.(int "x");
+  ]
+  |> run_in_exn session
+)
+```
+
+Transactions
+- Wrap chained operations in a transaction with `Cypher.in_transaction` if they must commit atomically.
+
+Tips
+- Keep extraction early in the chain; operate on typed values thereafter.
+- Use `expect_one`/`single` to clarify cardinality.
+- Prefer `and+` when pipelines are independent; use `let*` when the second depends on the first’s value.
+v}

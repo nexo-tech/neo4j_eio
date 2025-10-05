@@ -1,0 +1,67 @@
+{0 tx-dsl}
+
+{v
+# Transaction DSL
+
+The Transaction DSL composes multi‑step workflows that run atomically. It wraps `Session.begin_transaction/commit/rollback` and provides `let*`, `and+`, `catch`, and helpers. This page mirrors `ocaml/src/transaction_dsl.{mli,ml}` and example usage in `ocaml/examples/simple_queries.ml`.
+
+Core concepts
+- Type: `'a Transaction_dsl.t`
+- Build with `return`, `fail`, `let*`, `let+`, `and+`
+- Execute with `Transaction_dsl.run tx session`
+
+Running a transaction
+```ocaml
+open Neo4j_eio
+open Transaction_dsl
+
+let tx =
+  let* rows = exec_query_builder (Query_builder.raw "RETURN 1 AS ok") in
+  match rows with
+  | [r] -> (match Record.at_int r "ok" with Ok 1L -> return () | _ -> fail (Error.ClientError {code="Client.Decode"; message="expected 1"}))
+  | _ -> fail (Error.ClientError {code="Client.Shape"; message="expected one row"})
+
+let () =
+  Eio_main.run @@ fun env ->
+    let cfg = Config.of_env () in
+    Eio.Switch.run @@ fun sw ->
+      match Session.with_session ~sw ~net:env#net cfg (fun s -> run tx s) with
+      | Ok () -> ()
+      | Error e -> Printf.eprintf "tx failed: %s\n" (Error.to_string e)
+```
+
+Composing queries
+- Use `and+` to run queries whose results you want to combine.
+
+```ocaml
+let tx =
+  let+ r1 = exec_query_builder (Query_builder.raw "RETURN 1 AS a")
+  and+ r2 = exec_query_builder (Query_builder.raw "RETURN 2 AS b") in
+  match r1, r2 with
+  | [ra], [rb] ->
+      (match Record.at_int ra "a", Record.at_int rb "b" with
+       | Ok a, Ok b -> Printf.printf "sum=%Ld\n" (Int64.add a b)
+       | _ -> ())
+  | _ -> ()
+```
+
+Control flow and errors
+- `when_`, `unless`, `iter`, `map` help structure conditional and batch logic.
+- Use `catch` or `try_with` for fallback paths; both perform a rollback and start a new transaction for the handler branch.
+
+```ocaml
+let tx =
+  catch
+    (let* () = exec_query_builder_unit (Query_builder.raw "INVALID") in return ())
+    (fun err ->
+      Printf.printf "caught: %s\n" (Error.to_string err);
+      exec_query_builder_unit (Query_builder.raw "RETURN 1"))
+```
+
+Commit/rollback signals
+- Normally `run` auto‑commits on success and rolls back on error.
+- Use `commit`/`rollback` to signal intent explicitly when you want to return a value alongside control.
+
+Interoperability
+- You can mix direct `Session` calls by using `get_session` to obtain the session and `lift_result` to integrate result values.
+v}

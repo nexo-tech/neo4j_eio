@@ -1,0 +1,59 @@
+{0 streaming}
+
+{v
+# Streaming Large Result Sets
+
+For large result sets, use the streaming APIs to process data in chunks and control memory usage. This page reflects the current `Session.run_stream` and `Session.run_stream_records` implementations in `ocaml/src/session.ml`.
+
+APIs
+- Values: `Session.run_stream : t -> statement:string -> ?parameters:StringMap -> ?fetch_size:int64 -> unit -> (stream, Error.t) result`
+  - `stream.fetch_next : unit -> (Value.value list, Error.t) result`
+  - `stream.exhausted : bool`
+- Records: `Session.run_stream_records : t -> statement:string -> ?parameters:StringMap -> ?fetch_size:int64 -> unit -> (record_stream, Error.t) result`
+  - `record_stream.fetch_next_records : unit -> (Record.t list, Error.t) result`
+  - `record_stream.exhausted : bool`
+- Collectors:
+  - `Session.stream_to_list : stream -> (Value.value list, Error.t) result`
+  - `Session.record_stream_to_list : record_stream -> (Record.t list, Error.t) result`
+
+Consume a record stream
+```ocaml
+open Neo4j_eio
+
+let consume session =
+  match Session.run_stream_records session
+          ~statement:"UNWIND range(1, 10) AS n RETURN n"
+          ~fetch_size:3L () with
+  | Error e -> Printf.eprintf "start error: %s\n" (Error.to_string e)
+  | Ok s ->
+      let rec loop () =
+        if s.exhausted then () else
+        match s.fetch_next_records () with
+        | Error e -> Printf.eprintf "fetch error: %s\n" (Error.to_string e)
+        | Ok chunk ->
+            List.iter (fun r -> match Record.at_int r "n" with Ok n -> Printf.printf "%Ld\n" n | _ -> ()) chunk;
+            loop ()
+      in
+      loop ()
+```
+
+Materialize a stream
+```ocaml
+match Session.run_stream_records session ~statement:"RETURN 1 AS x" () with
+| Ok s -> (match Session.record_stream_to_list s with Ok rows -> Printf.printf "rows=%d\n" (List.length rows) | Error e -> Printf.eprintf "%s\n" (Error.to_string e))
+| Error e -> Printf.eprintf "%s\n" (Error.to_string e)
+```
+
+Fetch size
+- `~fetch_size` controls records requested per `PULL`. For `run_stream(_records)`, it sets the chunk size; for strict `run/run_records`, the driver loops until completion, possibly issuing multiple `PULL`s.
+- Tune `fetch_size` to balance latency and memory.
+
+Failure and reset behavior
+- On `FAILURE` during streaming outside a transaction, the session is auto‑reset and the stream ends with an `Error`.
+- Inside a transaction, auto‑reset is suppressed until rollback.
+
+Tips
+- Prefer record streams when you need field names for decoding via `Record`.
+- Keep chunk sizes modest to avoid long GC pauses.
+- If you need a full list anyway, use the `*_to_list` helpers which repeatedly fetch until `exhausted`.
+v}

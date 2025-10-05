@@ -1,0 +1,26 @@
+{0 faq}
+
+{v
+# FAQ
+
+Does the driver support TLS and bolt+s?
+- Current session connection path does not enable TLS and connects to 127.0.0.1. Use non‑TLS `bolt://` locally or through a tunnel. TLS enablement is planned.
+
+Can I run queries concurrently on one session?
+- A session serializes requests (one in‑flight exchange). Create multiple sessions for parallel queries.
+
+How do I stream large results?
+- Use `Session.run_stream`/`run_stream_records` with `~fetch_size`. Iterate via `fetch_next(_records)` and stop when `exhausted` is true.
+
+How do I set fetch size?
+- Pass `~fetch_size` to streaming functions, or for strict queries `Session.run(_records)` will loop with repeated PULLs; you can also pass `~fetch_size` there.
+
+How do I decode nodes and relationships?
+- Use `Record.at_node`/`at_relationship` or `Extract.node`/`Extract.relationship`. Node props are in `Value.StringMap`.
+
+Why are field names missing?
+- Some Cypher returns (e.g., unlabeled projections) produce driver records without usable field names. Always alias fields (`AS name`).
+
+What happens after a query failure?
+- Outside transactions, the driver auto‑issues `RESET` and subsequent queries proceed. Inside a transaction, call `rollback` to clear failed state.
+v}

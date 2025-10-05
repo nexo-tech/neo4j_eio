@@ -1,0 +1,22 @@
+{0 config}
+
+{v
+# Config Module Reference
+
+Connection configuration and environment parsing (see ocaml/src/config.mli).
+
+Types
+- `type log_level = Debug | Info | Warn | Error | Silent`
+- `type t = { uri:string; user:string; password:string; user_agent:string; fetch_size:int; use_tls:bool; tls_ca:string option; log_level:log_level; protocols:int list }`
+
+Defaults/env
+- `default : unit -> t` — defaults (bolt://127.0.0.1:7687, user neo4j, password testpass, fetch_size=1000, protocols [5;4;3])
+- `of_env : unit -> t` — honors `NEO4J_URI` or `NEO4J_HOST/NEO4J_PORT`, `NEO4J_USER`/`NEO4J_USERNAME`, `NEO4J_PASSWORD`, `NEO4J_FETCH_SIZE`, `NEO4J_USER_AGENT`, `NEO4J_LOG_LEVEL`, `NEO4J_TLS`, `NEO4J_TLS_CA`
+
+Helpers
+- `parse_uri : string -> (string * int, string) result`
+- `make : ?uri:string -> ?user:string -> ?password:string -> ?user_agent:string -> ?fetch_size:int -> ?use_tls:bool -> ?tls_ca:string -> ?log_level:log_level -> ?protocols:int list -> unit -> t`
+
+Notes
+- Current connection path uses loopback (127.0.0.1) and does not enable TLS; see docs for status.
+v}

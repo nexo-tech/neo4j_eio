@@ -1,0 +1,34 @@
+{0 deployment}
+
+{v
+# Production Deployment Checklist
+
+Key considerations when deploying code using neo4j_eio.
+
+Configuration
+- Set `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` via secure env.
+- Tune `NEO4J_FETCH_SIZE` for typical workload; default is 1000.
+- `NEO4J_LOG_LEVEL`: choose `warn`/`error` in production.
+
+Connections and concurrency
+- One request per session; size the number of concurrent sessions to your workload.
+- Consider an application-level pool (see Pooling). Validate sessions on checkout (e.g., `RETURN 1`). Drop bad sessions.
+
+Streaming
+- Prefer streaming for large reads; choose an appropriate `~fetch_size` per query.
+
+Transactions
+- Keep transactions short. Use `Session.transact` or the Transaction DSL for clear commit/rollback semantics.
+
+Security and TLS
+- Current session path connects to loopback and does not enable TLS; deploy behind trusted networks or proxies accordingly.
+- Plan for TLS enablement once session TLS support lands; validate certificates by default.
+
+Observability
+- Log errors via `Error.to_string` with codes; add context (query name) without leaking sensitive params.
+- Measure latency and memory; consider chunk sizes and concurrency.
+
+Operational
+- Containerize app and Neo4j; ensure proper health checks for the DB.
+- Perform rolling restarts; design idempotent startup routines (e.g., MERGE for bootstrap).
+v}

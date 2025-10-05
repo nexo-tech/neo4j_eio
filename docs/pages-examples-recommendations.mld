@@ -1,0 +1,172 @@
+{0 recommendations}
+
+{v
+# Recommendation Engine Example
+
+This example shows practical recommendation patterns using the current API. We’ll model users purchasing items and generate recommendations using popularity and simple collaborative filtering.
+
+Data model
+- Nodes: `(:User {username, name})`, `(:Item {sku, title, tags})`
+- Relationships: `(:User)-[:PURCHASED]->(:Item)`
+
+APIs used
+- Query Builder: `Query_builder.raw`, `with_params`, `execute`, `execute_unit`
+- Record decoding: `Record.at_text`, `Record.at_int`, `Record.at_list Record.exact_text`
+- Optional pipeline post‑processing via `Cypher` (map/sort)
+
+Bootstrap sample data
+```ocaml
+open Neo4j_eio
+
+let bootstrap_data session label =
+  (* Create items with tags *)
+  let _ = Query_builder.execute_unit
+    (Query_builder.raw (Printf.sprintf
+       {|UNWIND [
+         {sku:'A', title:'Laptop', tags:['electronics','work']},
+         {sku:'B', title:'Mouse', tags:['electronics','accessory']},
+         {sku:'C', title:'Keyboard', tags:['electronics','accessory']},
+         {sku:'D', title:'Headphones', tags:['audio','accessory']},
+         {sku:'E', title:'Desk Lamp', tags:['home','light']}
+       ] AS x
+       MERGE (:Item:%s {sku: x.sku, title: x.title, tags: x.tags})|}
+       label)) session in
+  (* Create users *)
+  let _ = Query_builder.execute_unit
+    (Query_builder.raw (Printf.sprintf
+       {|UNWIND [
+         {u:'alice', n:'Alice'},
+         {u:'bob', n:'Bob'},
+         {u:'carol', n:'Carol'},
+         {u:'dave', n:'Dave'}
+       ] AS x
+       MERGE (:User:%s {username: x.u, name: x.n})|}
+       label)) session in
+  (* Purchases *)
+  let mk u s =
+    Query_builder.raw (Printf.sprintf
+      "MATCH (u:User:%s {username:$u}),(i:Item:%s {sku:$s}) MERGE (u)-[:PURCHASED]->(i)"
+      label label)
+    |> Query_builder.with_params [("u", Value.Text u); ("s", Value.Text s)]
+  in
+  let _ = Query_builder.execute_unit (mk "alice" "A") session in
+  let _ = Query_builder.execute_unit (mk "alice" "B") session in
+  let _ = Query_builder.execute_unit (mk "bob"   "B") session in
+  let _ = Query_builder.execute_unit (mk "bob"   "C") session in
+  let _ = Query_builder.execute_unit (mk "carol" "A") session in
+  let _ = Query_builder.execute_unit (mk "carol" "D") session in
+  let _ = Query_builder.execute_unit (mk "dave"  "C") session in
+  let _ = Query_builder.execute_unit (mk "dave"  "E") session in
+  Ok ()
+```
+
+Popularity‑based recommendations (items the user doesn’t own)
+```ocaml
+let recommend_popular session label ~for_user ~limit =
+  Query_builder.execute
+    (Query_builder.raw (Printf.sprintf
+       {|MATCH (me:User:%s {username:$u})
+        MATCH (other:User:%s)-[:PURCHASED]->(i:Item:%s)
+        WHERE other <> me AND NOT (me)-[:PURCHASED]->(i)
+        RETURN i.sku AS sku, i.title AS title, count(*) AS score
+        ORDER BY score DESC, title ASC
+        LIMIT $k|}
+       label label label)
+     |> Query_builder.with_params [
+          ("u", Value.Text for_user);
+          ("k", Value.Int (Int64.of_int limit));
+        ])
+    session
+```
+
+Collaborative filtering (users with shared purchases)
+```ocaml
+let recommend_similar_users session label ~for_user ~limit =
+  Query_builder.execute
+    (Query_builder.raw (Printf.sprintf
+       {|MATCH (me:User:%s {username:$u})-[:PURCHASED]->(p:Item:%s)<-[:PURCHASED]-(other:User:%s)
+        WITH me, other, count(DISTINCT p) AS overlap
+        MATCH (other)-[:PURCHASED]->(rec:Item:%s)
+        WHERE NOT (me)-[:PURCHASED]->(rec)
+        RETURN rec.sku AS sku, rec.title AS title, sum(overlap) AS score
+        ORDER BY score DESC, title ASC
+        LIMIT $k|}
+       label label label label)
+     |> Query_builder.with_params [
+          ("u", Value.Text for_user);
+          ("k", Value.Int (Int64.of_int limit));
+        ])
+    session
+```
+
+Content‑based (shared tags)
+```ocaml
+let recommend_by_tags session label ~for_user ~limit =
+  Query_builder.execute
+    (Query_builder.raw (Printf.sprintf
+       {|MATCH (me:User:%s {username:$u})-[:PURCHASED]->(p:Item:%s)
+        MATCH (rec:Item:%s)
+        WHERE NOT (me)-[:PURCHASED]->(rec) AND any(t IN p.tags WHERE t IN rec.tags)
+        RETURN rec.sku AS sku, rec.title AS title, size([t IN p.tags WHERE t IN rec.tags]) AS score
+        ORDER BY score DESC, title ASC
+        LIMIT $k|}
+       label label label)
+     |> Query_builder.with_params [
+          ("u", Value.Text for_user);
+          ("k", Value.Int (Int64.of_int limit));
+        ])
+    session
+```
+
+Putting it together
+```ocaml
+let () =
+  Eio_main.run @@ fun env ->
+    let cfg = Config.of_env () in
+    Eio.Switch.run @@ fun sw ->
+      match Session.with_session ~sw ~net:env#net cfg (fun session ->
+        let label = Printf.sprintf "REC_%d" (Random.int 1_000_000) in
+        let _ = bootstrap_data session label in
+
+        let show title rows =
+          Printf.printf "%s\n" title;
+          List.iter (fun r ->
+            match Record.at_text r "sku", Record.at_text r "title", Record.at_int r "score" with
+            | Ok sku, Ok title, Ok score ->
+                Printf.printf "  %s — %s (score %Ld)\n" sku title score
+            | _ -> ()
+          ) rows in
+
+        (* Popular items for Alice *)
+        (match recommend_popular session label ~for_user:"alice" ~limit:5 with
+         | Ok rows -> show "Popular for @alice:" rows
+         | Error e -> Printf.eprintf "Popular failed: %s\n" (Error.to_string e));
+
+        (* Similar users’ purchases for Alice *)
+        (match recommend_similar_users session label ~for_user:"alice" ~limit:5 with
+         | Ok rows -> show "Similar users -> @alice recommendations:" rows
+         | Error e -> Printf.eprintf "Similar failed: %s\n" (Error.to_string e));
+
+        (* Content-based tag similarity for Alice *)
+        (match recommend_by_tags session label ~for_user:"alice" ~limit:5 with
+         | Ok rows -> show "Tag overlap -> @alice recommendations:" rows
+         | Error e -> Printf.eprintf "Tags failed: %s\n" (Error.to_string e));
+
+        (* Cleanup *)
+        let _ = Query_builder.execute_unit
+          (Query_builder.raw (Printf.sprintf "MATCH (n:%s) DETACH DELETE n" label))
+          session in
+        Ok ()
+      ) with
+      | Ok () -> ()
+      | Error e -> Printf.eprintf "Session error: %s\n" (Error.to_string e)
+```
+
+Decoding
+- Fields returned are aliased (`sku`, `title`, `score`) and decoded with `Record.at_text`/`Record.at_int`.
+
+Tips
+- Keep examples label‑scoped for isolation and cleanup.
+- Tune scoring and WHERE clauses for your domain; the examples use simple overlap‑based scoring.
+- For larger datasets, consider using streaming APIs and post‑processing with `Cypher` transformations.
+v}

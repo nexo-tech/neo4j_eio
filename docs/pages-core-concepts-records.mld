@@ -1,0 +1,99 @@
+{0 records}
+
+{v
+# Records and Extraction
+
+This page covers decoding query results. It reflects the current `Record`, `Value`, and `Extract` modules.
+
+Record shapes
+- Query Builder returns `Record.t list` (named fields), same as `Session.run_records`.
+- `Record.t` is a `string -> Value.value` map with stable field names derived from `RETURN ... AS` metadata.
+
+Direct field access
+- For ad‑hoc access, use `Value.at` to get the raw `Value.value option`:
+
+```ocaml
+match Query_builder.execute (Query_builder.raw "RETURN 42 AS answer") session with
+| Ok [r] -> (match Value.at r "answer" with Some (Value.Int n) -> Printf.printf "%Ld\n" n | _ -> ())
+| _ -> ()
+```
+
+Typed decoders (Record.at_*)
+- Prefer `Record.at_*` for type‑safe decoding with explicit errors:
+
+```ocaml
+match Query_builder.execute
+  (Query_builder.raw "RETURN $name AS name, $age AS age"
+   |> Query_builder.with_params [ ("name", Value.Text "Alice"); ("age", Value.Int 30L) ])
+  session with
+| Ok [r] ->
+    (match Record.at_text r "name", Record.at_int r "age" with
+     | Ok name, Ok age -> Printf.printf "%s (%Ld)\n" name age
+     | Error e, _ | _, Error e -> Format.eprintf "decode: %a\n" Record.pp_decode_error e)
+| _ -> ()
+```
+
+Available decoders
+- Scalars: `at_unit`, `at_bool`, `at_int`, `at_int_as_int`, `at_float`, `at_text`, `at_bytes`
+- Collections: `at_list element_decoder`, `at_map`
+- Graph: `at_node`, `at_relationship`, `at_unbound_relationship`, `at_path`
+- Spatial/Temporal: `at_point2d`, `at_point3d`, `at_duration`, `at_date`, `at_local_time`, `at_time`, `at_local_datetime`, `at_datetime_zone_id`, `at_datetime_offset`
+- Raw: `at_value`
+
+Optional variants
+- `maybe_at_*` return `('a option, decode_error) result` — `None` when key is missing, error on type mismatch.
+
+Exact vs maybe on raw values
+- Use `Record.exact_*` and `Record.maybe_exact_*` to decode a standalone `Value.value`.
+
+Composite decoding with Extract
+- `Extract` provides monadic/applicative combinators for clean decoding pipelines.
+
+```ocaml
+open Extract
+
+type person = { name: string; age: int64; email: string option }
+
+let person_extractor =
+  let+ name = text "name"
+  and+ age = int "age"
+  and+ email = maybe_text "email" in
+  { name; age; email }
+
+let decode_person record =
+  match Extract.run person_extractor record with
+  | Ok p -> Printf.printf "%s (%Ld)\n" p.name p.age
+  | Error e -> Format.eprintf "extract: %a\n" Record.pp_decode_error e
+```
+
+Lists and nested structures
+- Use `Record.at_list` with element decoders or `Extract.list key element_exact`:
+
+```ocaml
+match Record.at_list Record.exact_int r "nums" with
+| Ok xs -> List.iter (fun n -> Printf.printf "%Ld\n" n) xs
+| Error e -> Format.eprintf "%a\n" Record.pp_decode_error e
+```
+
+Graph entities
+- Decode nodes/relationships/paths directly and then inspect their fields:
+
+```ocaml
+match Record.at_node r "p" with
+| Ok n ->
+    Printf.printf "labels=%s id=%Ld\n" (String.concat "," n.labels) n.node_id;
+    (match Value.StringMap.find_opt "name" n.props with
+     | Some (Value.Text s) -> Printf.printf "name=%s\n" s | _ -> ())
+| Error e -> Format.eprintf "%a\n" Record.pp_decode_error e
+```
+
+Error reporting
+- All decoders return `('a, Record.decode_error) result`.
+- Pretty‑print errors with `Record.pp_decode_error`.
+- Common errors: `KeyNotFound "field"`, `NotText`, `NotInt`, etc.
+
+Tips
+- Always alias your `RETURN` fields (`... AS name`) to get stable names.
+- Prefer `Record.at_*`/`Extract` for maintainable decoding logic.
+- Wrap multi‑step logic in the Transaction DSL and keep decoding local to the query.
+v}

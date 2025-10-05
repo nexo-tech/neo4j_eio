@@ -1,0 +1,168 @@
+{0 user-management}
+
+{v
+# User Management System Example
+
+This end-to-end example demonstrates a small user management workflow using the current neo4j_eio API: creating users, assigning roles, adding friendships, querying profiles, and doing all operations transactionally when needed.
+
+Key APIs used
+- Session lifecycle: `Session.with_session ~sw ~net cfg (fun s -> ...)`
+- Query Builder: `Query_builder.raw`, `with_params`, `execute`, `execute_unit`
+- Transaction DSL: `Transaction_dsl.(let*, let+, and+, run, exec_query_builder, exec_query_builder_unit, catch)`
+- Record decoding: `Record.at_text`, `Record.at_int`, `Record.at_list`, etc.
+
+Schema (labels/relationships)
+- Nodes: `(:User {username, name, email, createdAt})`, `(:Role {name})`
+- Relationships: `(:User)-[:HAS_ROLE]->(:Role)`, `(:User)-[:FRIEND_WITH]->(:User)` (undirected semantics modeled as two directed relationships or handled symmetrically in queries)
+
+Bootstrap roles
+```ocaml
+let bootstrap_roles session =
+  Query_builder.execute_unit
+    (Query_builder.raw "UNWIND ['admin','editor','viewer'] AS r MERGE (:Role {name: r})")
+    session
+```
+
+Create user (idempotent with MERGE)
+```ocaml
+let create_user session ~username ~name ~email =
+  Query_builder.execute
+    (Query_builder.raw
+       {|MERGE (u:User {username: $username})
+        ON CREATE SET u.name = $name, u.email = $email, u.createdAt = timestamp()
+        RETURN u.username AS username, u.name AS name, u.email AS email|}
+     |> Query_builder.with_params [
+          ("username", Value.Text username);
+          ("name", Value.Text name);
+          ("email", Value.Text email);
+        ])
+    session
+```
+
+Assign role to user
+```ocaml
+let assign_role session ~username ~role =
+  Query_builder.execute_unit
+    (Query_builder.raw
+       {|MATCH (u:User {username: $username}), (r:Role {name: $role})
+        MERGE (u)-[:HAS_ROLE]->(r)|}
+     |> Query_builder.with_params [
+          ("username", Value.Text username);
+          ("role", Value.Text role);
+        ])
+    session
+```
+
+Add friendship (symmetric)
+```ocaml
+let add_friendship session ~a ~b =
+  Query_builder.execute_unit
+    (Query_builder.raw
+       {|MATCH (a:User {username: $a}), (b:User {username: $b})
+        MERGE (a)-[:FRIEND_WITH]->(b)
+        MERGE (b)-[:FRIEND_WITH]->(a)|}
+     |> Query_builder.with_params [ ("a", Value.Text a); ("b", Value.Text b) ])
+    session
+```
+
+Fetch profile with roles and friends
+```ocaml
+let fetch_profile session ~username =
+  Query_builder.execute
+    (Query_builder.raw
+       {|MATCH (u:User {username: $username})
+        OPTIONAL MATCH (u)-[:HAS_ROLE]->(r:Role)
+        OPTIONAL MATCH (u)-[:FRIEND_WITH]->(f:User)
+        RETURN u.name AS name, u.email AS email,
+               collect(DISTINCT r.name) AS roles,
+               collect(DISTINCT f.username) AS friends|}
+     |> Query_builder.with_param ("username", Value.Text username))
+    session
+```
+
+Transactional registration flow
+```ocaml
+open Transaction_dsl
+
+let register_user_tx ~username ~name ~email ~role =
+  let open Transaction_dsl in
+  let tx =
+    let* () = exec_query_builder_unit
+        (Query_builder.raw
+           {|MERGE (u:User {username: $username})
+            ON CREATE SET u.name = $name, u.email = $email, u.createdAt = timestamp()|}
+         |> Query_builder.with_params [
+              ("username", Value.Text username);
+              ("name", Value.Text name);
+              ("email", Value.Text email);
+            ]) in
+    let* () = exec_query_builder_unit
+        (Query_builder.raw
+           {|MATCH (u:User {username: $username}), (r:Role {name: $role})
+            MERGE (u)-[:HAS_ROLE]->(r)|}
+         |> Query_builder.with_params [
+              ("username", Value.Text username);
+              ("role", Value.Text role);
+            ]) in
+    return ()
+  in
+  tx
+```
+
+Putting it together
+```ocaml
+let () =
+  Eio_main.run @@ fun env ->
+    let cfg = Config.of_env () in
+    Eio.Switch.run @@ fun sw ->
+      match Session.with_session ~sw ~net:env#net cfg (fun session ->
+        (* Bootstrap *)
+        let _ = bootstrap_roles session in
+
+        (* Create users *)
+        let _ = create_user session ~username:"alice" ~name:"Alice" ~email:"alice@example.com" in
+        let _ = create_user session ~username:"bob" ~name:"Bob" ~email:"bob@example.com" in
+
+        (* Assign roles & friendship *)
+        let _ = assign_role session ~username:"alice" ~role:"admin" in
+        let _ = assign_role session ~username:"bob" ~role:"viewer" in
+        let _ = add_friendship session ~a:"alice" ~b:"bob" in
+
+        (* Transactional registration of a new user *)
+        (match Transaction_dsl.run (register_user_tx ~username:"charlie" ~name:"Charlie" ~email:"charlie@example.com" ~role:"editor") session with
+         | Ok () -> ()
+         | Error e -> Printf.eprintf "Registration failed: %s\n" (Error.to_string e));
+
+        (* Query a profile *)
+        (match fetch_profile session ~username:"alice" with
+         | Ok [r] ->
+             (match Record.at_text r "name",
+                    Record.at_text r "email",
+                    Record.at_list Record.exact_text r "roles",
+                    Record.at_list Record.exact_text r "friends" with
+              | Ok name, Ok email, Ok roles, Ok friends ->
+                  Printf.printf "User: %s (%s)\nRoles: %s\nFriends: %s\n"
+                    name email (String.concat ", " roles) (String.concat ", " friends)
+              | _ -> Printf.printf "Decode error\n")
+         | Ok _ -> Printf.printf "User not found\n"
+         | Error e -> Printf.eprintf "Query failed: %s\n" (Error.to_string e));
+        Ok ()
+      ) with
+      | Ok () -> ()
+      | Error e -> Printf.eprintf "Session error: %s\n" (Error.to_string e)
+```
+
+Cleanup helpers
+```ocaml
+let cleanup_by_label session label =
+  Query_builder.execute_unit
+    (Query_builder.raw (Printf.sprintf "MATCH (n:%s) DETACH DELETE n" label))
+    session
+```
+
+Notes
+- Use `MERGE` to keep operations idempotent during bootstrap and registration.
+- Always alias return fields (`AS name`, `AS email`) to get stable keys.
+- Prefer `Transaction_dsl` for multi-step flows to ensure commit/rollback semantics.
+- For undirected friendships, enforce symmetry in writes or use a single directed relationship and account for both directions in queries.
+v}

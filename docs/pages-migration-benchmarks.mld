@@ -1,0 +1,80 @@
+{0 benchmarks}
+
+{v
+# Performance Benchmarks
+
+This page explains how to run and interpret the built‑in benchmark suite for neo4j_eio. The suite covers PackStream, query execution, transactions, streaming, and record extraction. It reflects the current code in `ocaml/bench/benchmarks.ml` and requires OCaml 5 + Eio.
+
+What’s measured
+- PackStream encode (ints, lists, maps, text)
+- Query execution (simple, parameterized, filtered, aggregation)
+- Batch operations (UNWIND create, SET, DELETE)
+- Transaction performance (multiple operations, rollback)
+- Streaming vs materialized queries
+- Record decoding (`Record.at_*`) and `Extract` combinators
+
+Prerequisites
+- Neo4j available on `bolt://127.0.0.1:7687` with `NEO4J_USER`/`NEO4J_PASSWORD` (defaults from compose are neo4j/testpass)
+- OCaml 5.1+ with `dune`
+
+Quick start
+```bash
+cd ocaml
+opam switch create . 5.2.1   # or 5.1+
+eval $(opam env)
+opam install . --deps-only -y
+
+# Start Neo4j (optional for DB parts)
+docker compose up -d neo4j
+export NEO4J_URI=bolt://127.0.0.1:7687
+export NEO4J_USER=neo4j
+export NEO4J_PASSWORD=testpass
+
+# Run the benchmarks
+dune exec bench/benchmarks.exe
+```
+
+Output format
+- Each section prints timings. For loops use the format:
+  - `NAME: N iterations in T sec (P sec/op, R ops/sec)`
+- One‑shot `time_operation` prints `NAME: S seconds`
+
+Examples (simplified)
+```
+=== PackStream Encoding/Decoding ===
+Encode small Int (42)                         : 10000 iterations in 0.080000 sec (0.000008 sec/op, 125000 ops/sec)
+Encode list of 1000 ints                      : 1000 iterations in 0.090000 sec (0.000090 sec/op, 11111 ops/sec)
+...
+
+=== Query Execution ===
+Simple RETURN query                            : 0.002345 seconds
+Parameterized query                            : 0.002901 seconds
+...
+```
+
+What it does (grounded in code)
+- PackStream: builds representative `Value.value`s and encodes them with `Packstream.encode_value`.
+- Queries: uses `Session.with_session` and `Query_builder.execute/execute_unit` for `RETURN`, `MATCH/WHERE`, `COUNT`.
+- Batch: `UNWIND range(1, N)` for create, followed by `SET` and `DELETE` on a label‑scoped dataset.
+- Transactions: `Transaction_dsl.run` with repeated `CREATE`, and a rollback scenario.
+- Streaming: `Session.run_stream_records` with `~fetch_size`, compare to materialized `Query_builder.execute`.
+- Extraction: `Record.at_*` and `Extract.run` on an in‑memory record.
+
+Reproducibility and isolation
+- Each DB test uses a randomized label (e.g., `BenchNode_123456`) and cleans up with `MATCH (n:Label) DELETE n`.
+- Benchmarks write to your local Neo4j instance; run in an isolated DB for consistent results.
+
+Tuning
+- You can adjust counts in `benchmarks.ml` (e.g., list/map sizes, UNWIND ranges) to stress different workloads.
+- For streaming, tweak `~fetch_size` to study latency vs throughput trade‑offs.
+
+Caveats
+- Results depend on hardware, DB configuration, and server load. Treat numbers as directional.
+- The current session path uses loopback and no TLS.
+
+Where to look in code
+- PackStream/Value: `ocaml/src/packstream.ml`, `ocaml/src/value.ml`
+- Session/Query Builder: `ocaml/src/session.ml`, `ocaml/src/query_builder.ml`
+- Transaction DSL: `ocaml/src/transaction_dsl.ml`
+- Bench harness: `ocaml/bench/benchmarks.ml`, `ocaml/bench/dune`
+v}

@@ -1,0 +1,32 @@
+{0 session}
+
+{v
+# Session Module Reference
+
+High-level session API (functions from ocaml/src/session.ml).
+
+Create/close
+- `with_session ~sw ~net cfg (fun session -> ...) : (('a, Error.t) result)` — opens, authenticates, and closes a connection (sends GOODBYE).
+- `close : t -> unit` (implicitly used by `with_session`).
+
+Query (strict)
+- `run ~statement ?parameters ?fetch_size () : (Value.value list list, Error.t) result`
+- `run_records ~statement ?parameters ?fetch_size () : (Record.t list, Error.t) result`
+
+Streaming
+- `run_stream ~statement ?parameters ?fetch_size () : (stream, Error.t) result`
+  - `stream.fetch_next : unit -> (Value.value list, Error.t) result`
+  - `stream.exhausted : bool`
+- `run_stream_records ... : (record_stream, Error.t) result`
+  - `record_stream.fetch_next_records : unit -> (Record.t list, Error.t) result`
+  - `record_stream.exhausted : bool`
+- Collectors: `stream_to_list`, `record_stream_to_list`
+
+Transactions
+- `begin_transaction : (unit, Error.t) result`
+- `commit : (unit, Error.t) result`, `rollback : (unit, Error.t) result`
+- `transact : (t -> ('a, Error.t) result) -> ('a, Error.t) result`
+
+Recovery
+- `reset : (unit, Error.t) result` — clear failed state (auto‑issued on server FAILURE outside transactions)
+v}
