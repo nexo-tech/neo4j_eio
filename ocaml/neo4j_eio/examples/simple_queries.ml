@@ -20,20 +20,20 @@ let example_basic_return session =
 
 (* Example 2: Using query with parameters *)
 let example_query_with_params session =
-  Printf.printf "\nExample 2: Query with parameters (query_p)\n";
+  Printf.printf "\nExample 2: Query with parameters\n";
 
   let open Neo4j in
-  match query_p session
+  match query session
     ~statement:"RETURN $num * 2 AS doubled, $text AS echo"
     ~parameters:(props [
-      "num" =: Value.int 21L;
-      "text" =: Value.text "Hello, Neo4j!";
+      "num" =: int 21L;
+      "text" =: text "Hello, Neo4j!";
     ])
     () with
   | Ok [Value.Int doubled; Value.Text echo] ->
       Printf.printf "  Parameters sent: num=21, text='Hello, Neo4j!'\n";
       Printf.printf "  Results: doubled=%Ld, echo=%s\n" doubled echo;
-      Printf.printf "  ✓ Parameter substitution works\n"
+      Printf.printf "  ✓ Parameter substitution works (simpler!)\n"
   | Ok _ ->
       Printf.printf "  ✗ Unexpected result format\n"
   | Error e ->
@@ -60,22 +60,22 @@ let example_query_ignore_results session =
   | Error e ->
       Printf.eprintf "  ✗ Create failed: %s\n" (Error.to_string e)
 
-(* Example 4: Using query_p_ with parameters and ignoring results *)
+(* Example 4: Using query_ with parameters and ignoring results *)
 let example_query_p_ignore_results session =
-  Printf.printf "\nExample 4: Parameters with ignored results (query_p_)\n";
+  Printf.printf "\nExample 4: Parameters with ignored results\n";
 
   let label = Printf.sprintf "Temp_%d" (Random.int 1000000) in
   let open Neo4j in
 
-  match query_p_ session
+  match query_ session
     ~statement:(Printf.sprintf "CREATE (n:%s {name: $name, value: $value})" label)
     ~parameters:(props [
-      "name" =: Value.text "Test";
-      "value" =: Value.int 123L;
+      "name" =: text "Test";
+      "value" =: int 123L;
     ])
     () with
   | Ok () ->
-      Printf.printf "  ✓ Node created with parameters (results ignored)\n";
+      Printf.printf "  ✓ Node created with parameters (cleaner syntax!)\n";
       (* Cleanup *)
       let _ = query_ session
         ~statement:(Printf.sprintf "MATCH (n:%s) DELETE n" label)
@@ -128,14 +128,14 @@ let example_nested_properties session =
   let label = Printf.sprintf "Person_%d" (Random.int 1000000) in
   let open Neo4j in
 
-  match query_p session
+  match query session
     ~statement:(Printf.sprintf
       "CREATE (p:%s {name: $person.name, age: $person.age}) RETURN p.name AS name, p.age AS age"
       label)
     ~parameters:(props [
       "person" =: Value.Map (props [
-        "name" =: Value.text "Alice";
-        "age" =: Value.int 30L;
+        "name" =: text "Alice";
+        "age" =: int 30L;
       ])
     ])
     () with
@@ -158,11 +158,11 @@ let example_multiple_params session =
   Printf.printf "\nExample 8: Multiple parameters with props helper\n";
 
   let open Neo4j in
-  match query_p session
+  match query session
     ~statement:"RETURN $a + $b AS sum, $a * $b AS product"
     ~parameters:(props [
-      "a" =: Value.int 7L;
-      "b" =: Value.int 6L;
+      "a" =: int 7L;
+      "b" =: int 6L;
     ])
     () with
   | Ok [Value.Int sum; Value.Int product] ->
