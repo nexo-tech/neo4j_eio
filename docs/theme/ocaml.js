@@ -47,10 +47,24 @@
     };
   }
 
-  if (typeof window !== 'undefined' && window.hljs) {
-    window.hljs.registerLanguage('ocaml', ocaml);
-  } else if (typeof hljs !== 'undefined') {
-    hljs.registerLanguage('ocaml', ocaml);
+  // Register the language and highlight all OCaml blocks
+  function initOcaml() {
+    if (typeof window !== 'undefined' && window.hljs) {
+      window.hljs.registerLanguage('ocaml', ocaml);
+      // Re-highlight all OCaml code blocks
+      document.querySelectorAll('pre code.language-ocaml, pre code.lang-ocaml').forEach(function(block) {
+        window.hljs.highlightElement(block);
+      });
+    } else if (typeof hljs !== 'undefined') {
+      hljs.registerLanguage('ocaml', ocaml);
+    }
+  }
+
+  // Execute when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initOcaml);
+  } else {
+    initOcaml();
   }
 })();
 
