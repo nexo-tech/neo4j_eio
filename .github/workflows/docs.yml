@@ -39,12 +39,21 @@ jobs:
               opam install dune odoc --yes
               eval $(opam env)
 
-              # Convert markdown files to mld
+              # Convert markdown files to mld (skip SUMMARY.md and README.md)
               echo "Converting markdown documentation..."
               find docs/src -name "*.md" -type f | while read -r mdfile; do
+                # Skip SUMMARY.md and README.md files
+                basename=$(basename "$mdfile")
+                if [ "$basename" = "SUMMARY.md" ] || [ "$basename" = "README.md" ]; then
+                  echo "Skipping: $mdfile"
+                  continue
+                fi
+
                 relpath="${mdfile#docs/src/}"
                 mldfile="docs/pages/${relpath%.md}.mld"
                 mkdir -p "$(dirname "$mldfile")"
+
+                echo "Converting: $mdfile -> $mldfile"
 
                 # Convert markdown to odoc format
                 echo "{0 $(basename "$mdfile" .md)}" > "$mldfile"
@@ -57,11 +66,12 @@ jobs:
               done
 
               # Update docs/dune to include all mld files
+              echo "Generating docs/dune..."
               echo "(documentation" > docs/dune
               echo " (package neo4j_eio)" >> docs/dune
               echo " (mld_files" >> docs/dune
               echo "  index pipelines extractors transactions streaming best-practices" >> docs/dune
-              find docs/pages -name "*.mld" -type f | while read f; do
+              find docs/pages -name "*.mld" -type f | sort | while read f; do
                 name=$(basename "$f" .mld)
                 reldir=$(dirname "${f#docs/pages/}")
                 if [ "$reldir" = "." ]; then
@@ -71,6 +81,12 @@ jobs:
                 fi
               done
               echo " ))" >> docs/dune
+
+              echo "Generated docs/dune:"
+              cat docs/dune
+
+              echo "Listing all .mld files:"
+              find docs -name "*.mld" -type f | sort
 
               # Build documentation
               dune build @doc
