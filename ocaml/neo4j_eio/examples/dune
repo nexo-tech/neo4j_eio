@@ -1,0 +1,4 @@
+(executable
+ (name simple_queries)
+ (modules simple_queries)
+ (libraries neo4j_eio eio eio_main))
