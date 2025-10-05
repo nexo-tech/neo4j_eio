@@ -128,3 +128,9 @@
  (modules comprehensive_integration_test)
  (libraries neo4j_eio eio eio_main alcotest test_helper)
  (action (run %{exe:comprehensive_integration_test.exe})))
+
+(test
+ (name result_ops_test)
+ (modules result_ops_test)
+ (libraries neo4j_eio)
+ (action (run %{exe:result_ops_test.exe})))

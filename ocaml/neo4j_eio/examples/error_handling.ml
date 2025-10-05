@@ -81,7 +81,7 @@ let example_error_recovery session =
            Printf.printf "  ✓ Next query works immediately, got: %Ld\n" n;
            Printf.printf "  ✓ No manual reset needed!\n"
        | Error e ->
-           Printf.printf "  ✗ Decode error: %a\n" Record.pp_decode_error e)
+           Format.printf "  ✗ Decode error: %a\n" Record.pp_decode_error e)
   | Ok _ ->
       Printf.printf "  ✗ Unexpected result format\n"
   | Error e ->
