@@ -182,3 +182,9 @@
  (modules transformation_test)
  (libraries neo4j_eio eio eio_main alcotest test_helper)
  (action (run %{exe:transformation_test.exe})))
+
+(test
+ (name pipeline_integration_test)
+ (modules pipeline_integration_test)
+ (libraries neo4j_eio eio eio_main alcotest test_helper)
+ (action (run %{exe:pipeline_integration_test.exe})))

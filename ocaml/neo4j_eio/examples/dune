@@ -57,3 +57,8 @@
  (name transformations)
  (modules transformations)
  (libraries neo4j_eio eio eio_main))
+
+(executable
+ (name pipeline_showcase)
+ (modules pipeline_showcase)
+ (libraries neo4j_eio eio eio_main))
