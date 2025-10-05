@@ -36,9 +36,16 @@ jobs:
             -w /workspace \
             ocaml/opam:ubuntu-22.04-ocaml-5.2 \
             bash -c '
-              # Install build tools and all dependencies
+              set -e  # Exit on error
+
+              echo "Installing dependencies..."
               opam install dune odoc eio eio_main cstruct angstrom tls-eio x509 ca-certs domain-name alcotest --yes
+
+              echo "Setting up opam environment..."
               eval $(opam env)
+
+              echo "Checking dune version..."
+              dune --version
 
               # Convert markdown files to mld (skip SUMMARY.md and README.md)
               # Use flat naming: docs/src/advanced/tx-dsl.md -> docs/pages-advanced-tx-dsl.mld
