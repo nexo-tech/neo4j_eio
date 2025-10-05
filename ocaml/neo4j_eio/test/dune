@@ -76,12 +76,6 @@
  (action (run %{exe:error_reset_test.exe})))
 
 (test
- (name high_level_api_test)
- (modules high_level_api_test)
- (libraries neo4j_eio eio eio_main alcotest test_helper)
- (action (run %{exe:high_level_api_test.exe})))
-
-(test
  (name record_test)
  (modules record_test)
  (libraries neo4j_eio alcotest)
@@ -140,12 +134,6 @@
  (modules extract_test)
  (libraries neo4j_eio)
  (action (run %{exe:extract_test.exe})))
-
-(test
- (name query_helper_test)
- (modules query_helper_test)
- (libraries neo4j_eio eio eio_main alcotest test_helper)
- (action (run %{exe:query_helper_test.exe})))
 
 (test
  (name composite_extractors_test)

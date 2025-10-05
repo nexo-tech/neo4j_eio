@@ -2,6 +2,13 @@
 
 open Neo4j_eio
 
+(* Helper to convert decode errors to Neo4j errors *)
+let decode_to_error = function
+  | Ok v -> Ok v
+  | Error decode_err ->
+      let msg = Format.asprintf "Extraction failed: %a" Record.pp_decode_error decode_err in
+      Error (Error.Protocol msg)
+
 (* Test text_int composite extractor *)
 let test_text_int env cfg =
   Eio.Switch.run @@ fun sw ->
@@ -9,25 +16,30 @@ let test_text_int env cfg =
       let label = Printf.sprintf "CompTest_%d" (Random.int 1000000) in
 
       (* Setup *)
-      let _ = Query_helper.query_unit session
-        (Printf.sprintf "CREATE (p:%s {name: 'Alice', id: 123})" label)
-        ()
+      let _ = Query_builder.execute_unit
+        (Query_builder.raw (Printf.sprintf "CREATE (p:%s {name: 'Alice', id: 123})" label))
+        session
       in
 
       (* Test text_int extractor *)
-      let result = Query_helper.query_extract_one session
-        (Printf.sprintf "MATCH (p:%s) RETURN p.name AS name, p.id AS id" label)
-        Extract.(text_int "name" "id")
+      let result = match Query_builder.execute
+        (Query_builder.raw (Printf.sprintf "MATCH (p:%s) RETURN p.name AS name, p.id AS id" label))
+        session with
+        | Ok [record] -> decode_to_error (Extract.(run (text_int "name" "id") record))
+        | Ok _ -> Error (Error.Protocol "Expected single record")
+        | Error e -> Error e
       in
 
       (* Cleanup *)
-      let _ = Query_helper.query_unit session
-        (Printf.sprintf "MATCH (n:%s) DELETE n" label) ()
+      let _ = Query_builder.execute_unit
+        (Query_builder.raw (Printf.sprintf "MATCH (n:%s) DELETE n" label))
+        session
       in
 
       match result with
       | Ok ("Alice", 123L) -> Ok ()
-      | _ -> Error (Error.Protocol "text_int test failed")
+      | Ok _ -> Error (Error.Protocol "text_int test failed - wrong values")
+      | Error e -> Error e
     ) with
     | Ok () -> ()
     | Error e -> Alcotest.failf "Test failed: %s" (Error.to_string e)
@@ -39,20 +51,24 @@ let test_text_list env cfg =
       let label = Printf.sprintf "CompTest_%d" (Random.int 1000000) in
 
       (* Setup *)
-      let _ = Query_helper.query_unit session
-        (Printf.sprintf "CREATE (p:%s {tags: ['tag1', 'tag2', 'tag3']})" label)
-        ()
+      let _ = Query_builder.execute_unit
+        (Query_builder.raw (Printf.sprintf "CREATE (p:%s {tags: ['tag1', 'tag2', 'tag3']})" label))
+        session
       in
 
       (* Test text_list extractor *)
-      let result = Query_helper.query_extract_one session
-        (Printf.sprintf "MATCH (p:%s) RETURN p.tags AS tags" label)
-        Extract.(text_list "tags")
+      let result = match Query_builder.execute
+        (Query_builder.raw (Printf.sprintf "MATCH (p:%s) RETURN p.tags AS tags" label))
+        session with
+        | Ok [record] -> decode_to_error (Extract.(run (text_list "tags") record))
+        | Ok _ -> Error (Error.Protocol "Expected single record")
+        | Error e -> Error e
       in
 
       (* Cleanup *)
-      let _ = Query_helper.query_unit session
-        (Printf.sprintf "MATCH (n:%s) DELETE n" label) ()
+      let _ = Query_builder.execute_unit
+        (Query_builder.raw (Printf.sprintf "MATCH (n:%s) DELETE n" label))
+        session
       in
 
       match result with
@@ -70,20 +86,24 @@ let test_int_list env cfg =
       let label = Printf.sprintf "CompTest_%d" (Random.int 1000000) in
 
       (* Setup *)
-      let _ = Query_helper.query_unit session
-        (Printf.sprintf "CREATE (p:%s {values: [10, 20, 30]})" label)
-        ()
+      let _ = Query_builder.execute_unit
+        (Query_builder.raw (Printf.sprintf "CREATE (p:%s {values: [10, 20, 30]})" label))
+        session
       in
 
       (* Test int_list extractor *)
-      let result = Query_helper.query_extract_one session
-        (Printf.sprintf "MATCH (p:%s) RETURN p.values AS values" label)
-        Extract.(int_list "values")
+      let result = match Query_builder.execute
+        (Query_builder.raw (Printf.sprintf "MATCH (p:%s) RETURN p.values AS values" label))
+        session with
+        | Ok [record] -> decode_to_error (Extract.(run (int_list "values") record))
+        | Ok _ -> Error (Error.Protocol "Expected single record")
+        | Error e -> Error e
       in
 
       (* Cleanup *)
-      let _ = Query_helper.query_unit session
-        (Printf.sprintf "MATCH (n:%s) DELETE n" label) ()
+      let _ = Query_builder.execute_unit
+        (Query_builder.raw (Printf.sprintf "MATCH (n:%s) DELETE n" label))
+        session
       in
 
       match result with
@@ -100,20 +120,24 @@ let test_node_id env cfg =
       let label = Printf.sprintf "CompTest_%d" (Random.int 1000000) in
 
       (* Setup *)
-      let _ = Query_helper.query_unit session
-        (Printf.sprintf "CREATE (p:%s {name: 'Bob'})" label)
-        ()
+      let _ = Query_builder.execute_unit
+        (Query_builder.raw (Printf.sprintf "CREATE (p:%s {name: 'Bob'})" label))
+        session
       in
 
       (* Test node_id extractor *)
-      let result = Query_helper.query_extract_one session
-        (Printf.sprintf "MATCH (p:%s) RETURN p" label)
-        Extract.(node_id "p")
+      let result = match Query_builder.execute
+        (Query_builder.raw (Printf.sprintf "MATCH (p:%s) RETURN p" label))
+        session with
+        | Ok [record] -> decode_to_error (Extract.(run (node_id "p") record))
+        | Ok _ -> Error (Error.Protocol "Expected single record")
+        | Error e -> Error e
       in
 
       (* Cleanup *)
-      let _ = Query_helper.query_unit session
-        (Printf.sprintf "MATCH (n:%s) DELETE n" label) ()
+      let _ = Query_builder.execute_unit
+        (Query_builder.raw (Printf.sprintf "MATCH (n:%s) DELETE n" label))
+        session
       in
 
       match result with
@@ -130,20 +154,24 @@ let test_node_labels env cfg =
       let label = Printf.sprintf "CompTest_%d" (Random.int 1000000) in
 
       (* Setup - create node with multiple labels *)
-      let _ = Query_helper.query_unit session
-        (Printf.sprintf "CREATE (p:%s:Person:User {name: 'Charlie'})" label)
-        ()
+      let _ = Query_builder.execute_unit
+        (Query_builder.raw (Printf.sprintf "CREATE (p:%s:Person:User {name: 'Charlie'})" label))
+        session
       in
 
       (* Test node_labels extractor *)
-      let result = Query_helper.query_extract_one session
-        (Printf.sprintf "MATCH (p:%s) RETURN p" label)
-        Extract.(node_labels "p")
+      let result = match Query_builder.execute
+        (Query_builder.raw (Printf.sprintf "MATCH (p:%s) RETURN p" label))
+        session with
+        | Ok [record] -> decode_to_error (Extract.(run (node_labels "p") record))
+        | Ok _ -> Error (Error.Protocol "Expected single record")
+        | Error e -> Error e
       in
 
       (* Cleanup *)
-      let _ = Query_helper.query_unit session
-        (Printf.sprintf "MATCH (n:%s) DELETE n" label) ()
+      let _ = Query_builder.execute_unit
+        (Query_builder.raw (Printf.sprintf "MATCH (n:%s) DELETE n" label))
+        session
       in
 
       match result with
@@ -161,20 +189,24 @@ let test_node_props env cfg =
       let label = Printf.sprintf "CompTest_%d" (Random.int 1000000) in
 
       (* Setup *)
-      let _ = Query_helper.query_unit session
-        (Printf.sprintf "CREATE (p:%s {name: 'Dave', age: 25})" label)
-        ()
+      let _ = Query_builder.execute_unit
+        (Query_builder.raw (Printf.sprintf "CREATE (p:%s {name: 'Dave', age: 25})" label))
+        session
       in
 
       (* Test node_props extractor *)
-      let result = Query_helper.query_extract_one session
-        (Printf.sprintf "MATCH (p:%s) RETURN p" label)
-        Extract.(node_props "p")
+      let result = match Query_builder.execute
+        (Query_builder.raw (Printf.sprintf "MATCH (p:%s) RETURN p" label))
+        session with
+        | Ok [record] -> decode_to_error (Extract.(run (node_props "p") record))
+        | Ok _ -> Error (Error.Protocol "Expected single record")
+        | Error e -> Error e
       in
 
       (* Cleanup *)
-      let _ = Query_helper.query_unit session
-        (Printf.sprintf "MATCH (n:%s) DELETE n" label) ()
+      let _ = Query_builder.execute_unit
+        (Query_builder.raw (Printf.sprintf "MATCH (n:%s) DELETE n" label))
+        session
       in
 
       match result with
@@ -194,32 +226,42 @@ let test_relationship_extractors env cfg =
       let label = Printf.sprintf "CompTest_%d" (Random.int 1000000) in
 
       (* Setup *)
-      let _ = Query_helper.query_unit session
-        (Printf.sprintf "CREATE (a:%s {name: 'A'})-[r:KNOWS {since: 2020}]->(b:%s {name: 'B'})" label label)
-        ()
+      let _ = Query_builder.execute_unit
+        (Query_builder.raw (Printf.sprintf "CREATE (a:%s {name: 'A'})-[r:KNOWS {since: 2020}]->(b:%s {name: 'B'})" label label))
+        session
       in
 
       (* Test rel_type extractor *)
-      let type_result = Query_helper.query_extract_one session
-        (Printf.sprintf "MATCH (a:%s)-[r]->(b) RETURN r" label)
-        Extract.(rel_type "r")
+      let type_result = match Query_builder.execute
+        (Query_builder.raw (Printf.sprintf "MATCH (a:%s)-[r]->(b) RETURN r" label))
+        session with
+        | Ok [record] -> decode_to_error (Extract.(run (rel_type "r") record))
+        | Ok _ -> Error (Error.Protocol "Expected single record")
+        | Error e -> Error e
       in
 
       (* Test rel_id extractor *)
-      let id_result = Query_helper.query_extract_one session
-        (Printf.sprintf "MATCH (a:%s)-[r]->(b) RETURN r" label)
-        Extract.(rel_id "r")
+      let id_result = match Query_builder.execute
+        (Query_builder.raw (Printf.sprintf "MATCH (a:%s)-[r]->(b) RETURN r" label))
+        session with
+        | Ok [record] -> decode_to_error (Extract.(run (rel_id "r") record))
+        | Ok _ -> Error (Error.Protocol "Expected single record")
+        | Error e -> Error e
       in
 
       (* Test rel_props extractor *)
-      let props_result = Query_helper.query_extract_one session
-        (Printf.sprintf "MATCH (a:%s)-[r]->(b) RETURN r" label)
-        Extract.(rel_props "r")
+      let props_result = match Query_builder.execute
+        (Query_builder.raw (Printf.sprintf "MATCH (a:%s)-[r]->(b) RETURN r" label))
+        session with
+        | Ok [record] -> decode_to_error (Extract.(run (rel_props "r") record))
+        | Ok _ -> Error (Error.Protocol "Expected single record")
+        | Error e -> Error e
       in
 
       (* Cleanup *)
-      let _ = Query_helper.query_unit session
-        (Printf.sprintf "MATCH (n:%s) DETACH DELETE n" label) ()
+      let _ = Query_builder.execute_unit
+        (Query_builder.raw (Printf.sprintf "MATCH (n:%s) DETACH DELETE n" label))
+        session
       in
 
       match type_result, id_result, props_result with
@@ -239,20 +281,24 @@ let test_pair env cfg =
       let label = Printf.sprintf "CompTest_%d" (Random.int 1000000) in
 
       (* Setup *)
-      let _ = Query_helper.query_unit session
-        (Printf.sprintf "CREATE (p:%s {name: 'Eve', active: true})" label)
-        ()
+      let _ = Query_builder.execute_unit
+        (Query_builder.raw (Printf.sprintf "CREATE (p:%s {name: 'Eve', active: true})" label))
+        session
       in
 
       (* Test pair extractor *)
-      let result = Query_helper.query_extract_one session
-        (Printf.sprintf "MATCH (p:%s) RETURN p.name AS name, p.active AS active" label)
-        Extract.(pair "name" "active" Record.at_text Record.at_bool)
+      let result = match Query_builder.execute
+        (Query_builder.raw (Printf.sprintf "MATCH (p:%s) RETURN p.name AS name, p.active AS active" label))
+        session with
+        | Ok [record] -> decode_to_error (Extract.(run (pair "name" "active" Record.at_text Record.at_bool) record))
+        | Ok _ -> Error (Error.Protocol "Expected single record")
+        | Error e -> Error e
       in
 
       (* Cleanup *)
-      let _ = Query_helper.query_unit session
-        (Printf.sprintf "MATCH (n:%s) DELETE n" label) ()
+      let _ = Query_builder.execute_unit
+        (Query_builder.raw (Printf.sprintf "MATCH (n:%s) DELETE n" label))
+        session
       in
 
       match result with
@@ -269,20 +315,24 @@ let test_triple env cfg =
       let label = Printf.sprintf "CompTest_%d" (Random.int 1000000) in
 
       (* Setup *)
-      let _ = Query_helper.query_unit session
-        (Printf.sprintf "CREATE (p:%s {name: 'Frank', age: 30, score: 95.5})" label)
-        ()
+      let _ = Query_builder.execute_unit
+        (Query_builder.raw (Printf.sprintf "CREATE (p:%s {name: 'Frank', age: 30, score: 95.5})" label))
+        session
       in
 
       (* Test triple extractor *)
-      let result = Query_helper.query_extract_one session
-        (Printf.sprintf "MATCH (p:%s) RETURN p.name AS name, p.age AS age, p.score AS score" label)
-        Extract.(triple "name" "age" "score" Record.at_text Record.at_int Record.at_float)
+      let result = match Query_builder.execute
+        (Query_builder.raw (Printf.sprintf "MATCH (p:%s) RETURN p.name AS name, p.age AS age, p.score AS score" label))
+        session with
+        | Ok [record] -> decode_to_error (Extract.(run (triple "name" "age" "score" Record.at_text Record.at_int Record.at_float) record))
+        | Ok _ -> Error (Error.Protocol "Expected single record")
+        | Error e -> Error e
       in
 
       (* Cleanup *)
-      let _ = Query_helper.query_unit session
-        (Printf.sprintf "MATCH (n:%s) DELETE n" label) ()
+      let _ = Query_builder.execute_unit
+        (Query_builder.raw (Printf.sprintf "MATCH (n:%s) DELETE n" label))
+        session
       in
 
       match result with
@@ -299,9 +349,9 @@ let test_realistic_user_extraction env cfg =
       let label = Printf.sprintf "CompTest_%d" (Random.int 1000000) in
 
       (* Setup *)
-      let _ = Query_helper.query_unit session
-        (Printf.sprintf "CREATE (u:%s:User {username: 'alice123', email: 'alice@example.com', tags: ['developer', 'admin']})" label)
-        ()
+      let _ = Query_builder.execute_unit
+        (Query_builder.raw (Printf.sprintf "CREATE (u:%s:User {username: 'alice123', email: 'alice@example.com', tags: ['developer', 'admin']})" label))
+        session
       in
 
       (* Extract user data using composite extractors *)
@@ -312,14 +362,18 @@ let test_realistic_user_extraction env cfg =
         (username, email, tags)
       ) in
 
-      let result = Query_helper.query_extract_one session
-        (Printf.sprintf "MATCH (u:%s) RETURN u.username AS username, u.email AS email, u.tags AS tags" label)
-        extractor
+      let result = match Query_builder.execute
+        (Query_builder.raw (Printf.sprintf "MATCH (u:%s) RETURN u.username AS username, u.email AS email, u.tags AS tags" label))
+        session with
+        | Ok [record] -> decode_to_error (Extract.run extractor record)
+        | Ok _ -> Error (Error.Protocol "Expected single record")
+        | Error e -> Error e
       in
 
       (* Cleanup *)
-      let _ = Query_helper.query_unit session
-        (Printf.sprintf "MATCH (n:%s) DELETE n" label) ()
+      let _ = Query_builder.execute_unit
+        (Query_builder.raw (Printf.sprintf "MATCH (n:%s) DELETE n" label))
+        session
       in
 
       match result with

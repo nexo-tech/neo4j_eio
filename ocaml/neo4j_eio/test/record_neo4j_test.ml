@@ -5,10 +5,9 @@ let test_query_with_record_decoding env cfg =
   Eio.Switch.run @@ fun sw ->
     match Session.with_session ~sw ~net:env#net cfg (fun session ->
       (* Query that returns a record-like structure *)
-      let open Neo4j in
-      match query session
-        ~statement:"RETURN 'Alice' AS name, 30 AS age, true AS active"
-        () with
+      match Query_builder.execute
+        (Query_builder.raw "RETURN 'Alice' AS name, 30 AS age, true AS active")
+        session with
       | Ok [record] ->
           (* Now the query returns records with named fields *)
           (match Value.at record "name", Value.at record "age", Value.at record "active" with

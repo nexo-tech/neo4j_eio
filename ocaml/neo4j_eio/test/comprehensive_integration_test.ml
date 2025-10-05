@@ -14,26 +14,29 @@ let test_parameter_substitution env cfg =
 
   Eio.Switch.run @@ fun sw ->
     match Session.with_session ~sw ~net:env#net cfg (fun session ->
-      let open Neo4j in
       (* Create node with parameters *)
       let create_stmt = Printf.sprintf
         "CREATE (n:%s {name: $name, age: $age, score: $score, active: $active}) RETURN n"
         unique_label in
 
-      match query_p session ~statement:create_stmt
-        ~parameters:(props [
-          "name" =: Value.text "Alice";
-          "age" =: Value.int 30L;
-          "score" =: Value.float 95.5;
-          "active" =: Value.bool true;
-        ]) () with
+      match Query_builder.execute
+        (Query_builder.raw create_stmt
+         |> Query_builder.with_params [
+              ("name", Value.text "Alice");
+              ("age", Value.int 30L);
+              ("score", Value.float 95.5);
+              ("active", Value.bool true);
+            ])
+        session with
       | Error e -> Error e
       | Ok _ ->
 
       (* Query back with parameters *)
       let match_stmt = Printf.sprintf "MATCH (n:%s {name: $name}) RETURN n.age AS age" unique_label in
-      match query_p session ~statement:match_stmt
-        ~parameters:(props ["name" =: Value.text "Alice"]) () with
+      match Query_builder.execute
+        (Query_builder.raw match_stmt
+         |> Query_builder.with_params [("name", Value.text "Alice")])
+        session with
       | Error e -> Error e
       | Ok [record] ->
           (match Value.at record "age" with
@@ -42,7 +45,7 @@ let test_parameter_substitution env cfg =
 
                (* Cleanup *)
                let delete_stmt = Printf.sprintf "MATCH (n:%s) DELETE n" unique_label in
-               query_ session ~statement:delete_stmt ()
+               Query_builder.execute_unit (Query_builder.raw delete_stmt) session
            | _ ->
                Error (Error.Protocol "Unexpected value type for age"))
       | Ok values ->
@@ -57,13 +60,12 @@ let test_node_decode env cfg =
 
   Eio.Switch.run @@ fun sw ->
     match Session.with_session ~sw ~net:env#net cfg (fun session ->
-      let open Neo4j in
       (* Create a node with multiple labels and properties *)
       let create_stmt = Printf.sprintf
         "CREATE (n:%s:Person {name: 'Bob', age: 25}) RETURN n"
         unique_label in
 
-      match query session ~statement:create_stmt () with
+      match Query_builder.execute (Query_builder.raw create_stmt) session with
       | Error e -> Error e
       | Ok [record] ->
           (match Value.at record "n" with
@@ -84,7 +86,7 @@ let test_node_decode env cfg =
 
                (* Cleanup *)
                let delete_stmt = Printf.sprintf "MATCH (n:%s) DELETE n" unique_label in
-               query_ session ~statement:delete_stmt ()
+               Query_builder.execute_unit (Query_builder.raw delete_stmt) session
            | _ -> Error (Error.Protocol "Expected Node value"))
       | Ok values ->
           Error (Error.Protocol (Printf.sprintf "Expected Node, got %d values" (List.length values)))
@@ -98,13 +100,12 @@ let test_relationship_decode env cfg =
 
   Eio.Switch.run @@ fun sw ->
     match Session.with_session ~sw ~net:env#net cfg (fun session ->
-      let open Neo4j in
       (* Create nodes and relationship *)
       let create_stmt = Printf.sprintf
         "CREATE (a:%s {name: 'Alice'})-[r:KNOWS {since: 2020}]->(b:%s {name: 'Bob'}) RETURN r"
         unique_label unique_label in
 
-      match query session ~statement:create_stmt () with
+      match Query_builder.execute (Query_builder.raw create_stmt) session with
       | Error e -> Error e
       | Ok [record] ->
           (match Value.at record "r" with
@@ -121,7 +122,7 @@ let test_relationship_decode env cfg =
 
                (* Cleanup *)
                let delete_stmt = Printf.sprintf "MATCH (n:%s) DETACH DELETE n" unique_label in
-               query_ session ~statement:delete_stmt ()
+               Query_builder.execute_unit (Query_builder.raw delete_stmt) session
            | _ -> Error (Error.Protocol "Expected Relationship value"))
       | Ok values ->
           Error (Error.Protocol (Printf.sprintf "Expected Relationship, got %d values" (List.length values)))
@@ -135,13 +136,12 @@ let test_path_decode env cfg =
 
   Eio.Switch.run @@ fun sw ->
     match Session.with_session ~sw ~net:env#net cfg (fun session ->
-      let open Neo4j in
       (* Create a path: A -> B -> C *)
       let create_stmt = Printf.sprintf
         "CREATE p = (a:%s {name: 'A'})-[:NEXT]->(b:%s {name: 'B'})-[:NEXT]->(c:%s {name: 'C'}) RETURN p"
         unique_label unique_label unique_label in
 
-      match query session ~statement:create_stmt () with
+      match Query_builder.execute (Query_builder.raw create_stmt) session with
       | Error e -> Error e
       | Ok [record] ->
           (match Value.at record "p" with
@@ -163,7 +163,7 @@ let test_path_decode env cfg =
 
                (* Cleanup *)
                let delete_stmt = Printf.sprintf "MATCH (n:%s) DETACH DELETE n" unique_label in
-               query_ session ~statement:delete_stmt ()
+               Query_builder.execute_unit (Query_builder.raw delete_stmt) session
            | _ -> Error (Error.Protocol "Expected Path value"))
       | Ok values ->
           Error (Error.Protocol (Printf.sprintf "Expected Path, got %d values" (List.length values)))
@@ -175,9 +175,8 @@ let test_path_decode env cfg =
 let test_point2d_type env cfg =
   Eio.Switch.run @@ fun sw ->
     match Session.with_session ~sw ~net:env#net cfg (fun session ->
-      let open Neo4j in
       (* Create a 2D point (Cartesian) *)
-      match query session ~statement:"RETURN point({x: 3.0, y: 4.0}) AS p" () with
+      match Query_builder.execute (Query_builder.raw "RETURN point({x: 3.0, y: 4.0}) AS p") session with
       | Error e -> Error e
       | Ok [record] ->
           (match Value.at record "p" with
@@ -198,9 +197,8 @@ let test_point2d_type env cfg =
 let test_point3d_type env cfg =
   Eio.Switch.run @@ fun sw ->
     match Session.with_session ~sw ~net:env#net cfg (fun session ->
-      let open Neo4j in
       (* Create a 3D point (Cartesian) *)
-      match query session ~statement:"RETURN point({x: 3.0, y: 4.0, z: 5.0}) AS p" () with
+      match Query_builder.execute (Query_builder.raw "RETURN point({x: 3.0, y: 4.0, z: 5.0}) AS p") session with
       | Error e -> Error e
       | Ok [record] ->
           (match Value.at record "p" with
@@ -222,9 +220,8 @@ let test_point3d_type env cfg =
 let test_duration_type env cfg =
   Eio.Switch.run @@ fun sw ->
     match Session.with_session ~sw ~net:env#net cfg (fun session ->
-      let open Neo4j in
       (* Create a duration: 1 year, 2 months, 3 days, 4 hours *)
-      match query session ~statement:"RETURN duration({years: 1, months: 2, days: 3, hours: 4}) AS d" () with
+      match Query_builder.execute (Query_builder.raw "RETURN duration({years: 1, months: 2, days: 3, hours: 4}) AS d") session with
       | Error e -> Error e
       | Ok [record] ->
           (match Value.at record "d" with
@@ -245,9 +242,8 @@ let test_duration_type env cfg =
 let test_date_type env cfg =
   Eio.Switch.run @@ fun sw ->
     match Session.with_session ~sw ~net:env#net cfg (fun session ->
-      let open Neo4j in
       (* Create a date *)
-      match query session ~statement:"RETURN date('2023-01-15') AS d" () with
+      match Query_builder.execute (Query_builder.raw "RETURN date('2023-01-15') AS d") session with
       | Error e -> Error e
       | Ok [record] ->
           (match Value.at record "d" with
@@ -266,9 +262,8 @@ let test_date_type env cfg =
 let test_local_time_type env cfg =
   Eio.Switch.run @@ fun sw ->
     match Session.with_session ~sw ~net:env#net cfg (fun session ->
-      let open Neo4j in
       (* Create a local time *)
-      match query session ~statement:"RETURN localtime('12:30:45') AS t" () with
+      match Query_builder.execute (Query_builder.raw "RETURN localtime('12:30:45') AS t") session with
       | Error e -> Error e
       | Ok [record] ->
           (match Value.at record "t" with
@@ -287,9 +282,8 @@ let test_local_time_type env cfg =
 let test_time_type env cfg =
   Eio.Switch.run @@ fun sw ->
     match Session.with_session ~sw ~net:env#net cfg (fun session ->
-      let open Neo4j in
       (* Create a time with timezone offset *)
-      match query session ~statement:"RETURN time('12:30:45+01:00') AS t" () with
+      match Query_builder.execute (Query_builder.raw "RETURN time('12:30:45+01:00') AS t") session with
       | Error e -> Error e
       | Ok [record] ->
           (match Value.at record "t" with
@@ -309,9 +303,8 @@ let test_time_type env cfg =
 let test_local_datetime_type env cfg =
   Eio.Switch.run @@ fun sw ->
     match Session.with_session ~sw ~net:env#net cfg (fun session ->
-      let open Neo4j in
       (* Create a local datetime *)
-      match query session ~statement:"RETURN localdatetime('2023-01-15T12:30:45') AS dt" () with
+      match Query_builder.execute (Query_builder.raw "RETURN localdatetime('2023-01-15T12:30:45') AS dt") session with
       | Error e -> Error e
       | Ok [record] ->
           (match Value.at record "dt" with
@@ -330,9 +323,8 @@ let test_local_datetime_type env cfg =
 let test_datetime_offset_type env cfg =
   Eio.Switch.run @@ fun sw ->
     match Session.with_session ~sw ~net:env#net cfg (fun session ->
-      let open Neo4j in
       (* Create a datetime with timezone offset *)
-      match query session ~statement:"RETURN datetime('2023-01-15T12:30:45+01:00') AS dt" () with
+      match Query_builder.execute (Query_builder.raw "RETURN datetime('2023-01-15T12:30:45+01:00') AS dt") session with
       | Error e -> Error e
       | Ok [record] ->
           (match Value.at record "dt" with
@@ -359,9 +351,8 @@ let test_datetime_offset_type env cfg =
 let test_datetime_zone_id_type env cfg =
   Eio.Switch.run @@ fun sw ->
     match Session.with_session ~sw ~net:env#net cfg (fun session ->
-      let open Neo4j in
       (* Create a datetime with timezone name *)
-      match query session ~statement:"RETURN datetime('2023-01-15T12:30:45[Europe/London]') AS dt" () with
+      match Query_builder.execute (Query_builder.raw "RETURN datetime('2023-01-15T12:30:45[Europe/London]') AS dt") session with
       | Error e -> Error e
       | Ok [record] ->
           (match Value.at record "dt" with
@@ -407,7 +398,6 @@ let test_transaction_rollback_on_error env cfg =
 
   Eio.Switch.run @@ fun sw ->
     match Session.with_session ~sw ~net:env#net cfg (fun session ->
-      let open Neo4j in
       (* Start transaction *)
       match Session.begin_transaction session () with
       | Error e -> Error e
@@ -415,7 +405,7 @@ let test_transaction_rollback_on_error env cfg =
 
       (* Create a node *)
       let create_stmt = Printf.sprintf "CREATE (n:%s {value: 42})" unique_label in
-      (match query_ session ~statement:create_stmt () with
+      (match Query_builder.execute_unit (Query_builder.raw create_stmt) session with
        | Error e -> Error e
        | Ok () ->
 
@@ -426,7 +416,7 @@ let test_transaction_rollback_on_error env cfg =
 
        (* Verify node doesn't exist *)
        let match_stmt = Printf.sprintf "MATCH (n:%s) RETURN count(n) AS cnt" unique_label in
-       match query session ~statement:match_stmt () with
+       match Query_builder.execute (Query_builder.raw match_stmt) session with
        | Error e -> Error e
        | Ok [record] ->
            (match Value.at record "cnt" with
@@ -446,7 +436,6 @@ let test_transaction_commit_success env cfg =
 
   Eio.Switch.run @@ fun sw ->
     match Session.with_session ~sw ~net:env#net cfg (fun session ->
-      let open Neo4j in
       (* Start transaction *)
       match Session.begin_transaction session () with
       | Error e -> Error e
@@ -454,7 +443,7 @@ let test_transaction_commit_success env cfg =
 
       (* Create a node *)
       let create_stmt = Printf.sprintf "CREATE (n:%s {value: 42})" unique_label in
-      (match query_ session ~statement:create_stmt () with
+      (match Query_builder.execute_unit (Query_builder.raw create_stmt) session with
        | Error e -> Error e
        | Ok () ->
 
@@ -465,14 +454,14 @@ let test_transaction_commit_success env cfg =
 
        (* Verify node exists *)
        let match_stmt = Printf.sprintf "MATCH (n:%s) RETURN count(n) AS cnt" unique_label in
-       match query session ~statement:match_stmt () with
+       match Query_builder.execute (Query_builder.raw match_stmt) session with
        | Error e -> Error e
        | Ok [record] ->
            (match Value.at record "cnt" with
             | Some (Value.Int 1L) ->
                 (* Cleanup *)
                 let delete_stmt = Printf.sprintf "MATCH (n:%s) DELETE n" unique_label in
-                query_ session ~statement:delete_stmt ()
+                Query_builder.execute_unit (Query_builder.raw delete_stmt) session
             | Some (Value.Int n) ->
                 Error (Error.Protocol (Printf.sprintf "Expected 1 node after commit, got %Ld" n))
             | _ -> Error (Error.Protocol "Expected Int value for count"))
