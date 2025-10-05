@@ -40,6 +40,7 @@ jobs:
               eval $(opam env)
 
               # Convert markdown files to mld (skip SUMMARY.md and README.md)
+              # Use flat naming: docs/src/advanced/tx-dsl.md -> docs/pages-advanced-tx-dsl.mld
               echo "Converting markdown documentation..."
               find docs/src -name "*.md" -type f | while read -r mdfile; do
                 # Skip SUMMARY.md and README.md files
@@ -49,9 +50,10 @@ jobs:
                   continue
                 fi
 
+                # Convert path to flat name with hyphens
                 relpath="${mdfile#docs/src/}"
-                mldfile="docs/pages/${relpath%.md}.mld"
-                mkdir -p "$(dirname "$mldfile")"
+                flatname=$(echo "${relpath%.md}" | tr "/" "-")
+                mldfile="docs/pages-${flatname}.mld"
 
                 echo "Converting: $mdfile -> $mldfile"
 
@@ -67,20 +69,17 @@ jobs:
 
               # Update docs/dune to include all mld files
               echo "Generating docs/dune..."
-              echo "(documentation" > docs/dune
-              echo " (package neo4j_eio)" >> docs/dune
-              echo " (mld_files" >> docs/dune
-              echo "  index pipelines extractors transactions streaming best-practices" >> docs/dune
-              find docs/pages -name "*.mld" -type f | sort | while read f; do
-                name=$(basename "$f" .mld)
-                reldir=$(dirname "${f#docs/pages/}")
-                if [ "$reldir" = "." ]; then
-                  echo "  pages/$name" >> docs/dune
-                else
-                  echo "  pages/$reldir/$name" >> docs/dune
-                fi
-              done
-              echo " ))" >> docs/dune
+              {
+                echo "(documentation"
+                echo " (package neo4j_eio)"
+                echo " (mld_files"
+                echo "  index pipelines extractors transactions streaming best-practices"
+                find docs -name "pages-*.mld" -type f | sort | while read f; do
+                  pagename=$(basename "$f" .mld)
+                  echo "  $pagename"
+                done
+                echo " ))"
+              } > docs/dune
 
               echo "Generated docs/dune:"
               cat docs/dune
