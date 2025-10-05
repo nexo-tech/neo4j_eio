@@ -16,7 +16,10 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    container:
+      image: ocaml/opam:ubuntu-22.04-ocaml-5.2
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,25 +27,56 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
-      - name: Setup OCaml
-        uses: ocaml/setup-ocaml@v2
-        with:
-          ocaml-compiler: 5.2.x
-          dune-cache: true
+      - name: Convert markdown to mld and build docs
+        run: |
+          sudo apt-get update && sudo apt-get install -y rsync pandoc
+          opam install dune odoc --yes
+          eval $(opam env)
 
-      - name: Pin package
-        run: opam pin add neo4j_eio . --no-action --yes
+          # Convert markdown files to mld
+          echo "Converting markdown documentation..."
+          find docs/src -name "*.md" -type f | while read -r mdfile; do
+            relpath="${mdfile#docs/src/}"
+            mldfile="docs/pages/${relpath%.md}.mld"
+            mkdir -p "$(dirname "$mldfile")"
 
-      - name: Install dependencies
-        run: opam install . --deps-only --with-doc --yes
+            # Convert markdown to odoc format
+            echo "{0 $(basename "$mdfile" .md)}" > "$mldfile"
+            echo "" >> "$mldfile"
+            cat "$mdfile" | sed -E \
+              -e 's/^# (.+)/{1 \1}/' \
+              -e 's/^## (.+)/{2 \1}/' \
+              -e 's/^### (.+)/{3 \1}/' \
+              >> "$mldfile"
+          done
 
-      - name: Build documentation
-        run: opam exec -- dune build @doc
+          # Update docs/dune to include all mld files
+          echo "(documentation" > docs/dune
+          echo " (package neo4j_eio)" >> docs/dune
+          echo " (mld_files" >> docs/dune
+          echo "  index pipelines extractors transactions streaming best-practices" >> docs/dune
+          find docs/pages -name "*.mld" -type f | while read f; do
+            name=$(basename "$f" .mld)
+            reldir=$(dirname "${f#docs/pages/}")
+            if [ "$reldir" = "." ]; then
+              echo "  pages/$name" >> docs/dune
+            else
+              echo "  pages/$reldir/$name" >> docs/dune
+            fi
+          done
+          echo " ))" >> docs/dune
+
+          # Build documentation
+          dune build @doc
 
       - name: Prepare docs for upload
         run: |
           mkdir -p _site
           cp -r _build/default/_doc/_html/* _site/
+
+          # Also copy original markdown for reference
+          mkdir -p _site/markdown
+          cp -r docs/src/* _site/markdown/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
