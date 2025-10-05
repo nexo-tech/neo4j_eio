@@ -27,7 +27,8 @@ jobs:
 
       - name: Build documentation in Docker
         run: |
-          # Fix permissions for Docker
+          # Create pages directory and fix permissions for Docker
+          mkdir -p docs/pages
           sudo chown -R 1000:1000 ${{ github.workspace }}
 
           docker run --rm \
