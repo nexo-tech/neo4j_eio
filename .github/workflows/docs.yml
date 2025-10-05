@@ -27,12 +27,14 @@ jobs:
 
       - name: Build documentation in Docker
         run: |
+          # Fix permissions for Docker
+          sudo chown -R 1000:1000 ${{ github.workspace }}
+
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace \
             ocaml/opam:ubuntu-22.04-ocaml-5.2 \
             bash -c '
-              sudo apt-get update && sudo apt-get install -y rsync pandoc
               opam install dune odoc --yes
               eval $(opam env)
 
