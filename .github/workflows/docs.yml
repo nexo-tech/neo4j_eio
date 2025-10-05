@@ -30,7 +30,10 @@ jobs:
 
       - name: Convert markdown to mld and build docs
         run: |
-          sudo apt-get update && sudo apt-get install -y rsync pandoc
+          apt-get update && apt-get install -y rsync pandoc
+
+          # Initialize opam for root user
+          opam init --disable-sandboxing --bare --yes
           opam install dune odoc --yes
           eval $(opam env)
 
