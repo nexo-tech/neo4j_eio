@@ -94,8 +94,8 @@ let test_count env cfg =
       ) in
 
       match result with
-      | Ok 5 -> Ok ()
-      | Ok n -> Error (Error.Protocol (Printf.sprintf "Expected count 5, got %d" n))
+      | Ok 5L -> Ok ()
+      | Ok n -> Error (Error.Protocol (Printf.sprintf "Expected count 5, got %Ld" n))
       | Error e -> Error e
     ) with
     | Ok () -> ()
@@ -321,7 +321,7 @@ let test_tap env cfg =
       ) in
 
       match result, !side_effect_counter with
-      | Ok 1, 1 -> Ok ()
+      | Ok 1L, 1 -> Ok ()
       | _ -> Error (Error.Protocol "tap test failed")
     ) with
     | Ok () -> ()

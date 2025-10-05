@@ -1,0 +1,281 @@
+{0 Best Practices}
+
+Guidelines for building robust, performant Neo4j applications with neo4j_eio.
+
+{1 Performance}
+
+{2 Use Streaming for Large Results}
+
+{[
+(* Good: Stream large result sets *)
+let good session =
+  Session.run_stream session
+    ~statement:"MATCH (n:User) RETURN n"
+    ~fetch_size:1000L
+    ()
+
+(* Bad: Load everything into memory *)
+let bad session =
+  Session.run_records session
+    ~statement:"MATCH (n:User) RETURN n"
+    ()
+]}
+
+{2 Batch Operations}
+
+{[
+(* Good: Batch CREATE with UNWIND *)
+let create_many session users =
+  let users_value = Value.List (List.map (fun u ->
+    Value.Map (StringMap.of_list [
+      ("name", Value.Text u.name);
+      ("age", Value.Int u.age)
+    ])
+  ) users) in
+
+  Query_builder.raw
+    "UNWIND $users AS user CREATE (u:User) SET u = user"
+  |> Query_builder.with_params [("users", users_value)]
+  |> Query_builder.execute_unit session
+
+(* Bad: Individual CREATEs *)
+let create_one_by_one session users =
+  List.iter (fun u ->
+    let _ = Query_builder.raw
+      "CREATE (u:User {name: $name, age: $age})"
+    |> Query_builder.with_params [
+        ("name", Value.Text u.name);
+        ("age", Value.Int u.age)
+      ]
+    |> Query_builder.execute_unit session
+    in ()
+  ) users
+]}
+
+{2 Use Parameters}
+
+{[
+(* Good: Use parameters *)
+let good session name =
+  Query_builder.raw "MATCH (u:User {name: $name}) RETURN u"
+  |> Query_builder.with_params [("name", Value.Text name)]
+  |> Query_builder.execute session
+
+(* Bad: String interpolation - vulnerable to injection *)
+let bad session name =
+  Query_builder.raw (Printf.sprintf "MATCH (u:User {name: '%s'}) RETURN u" name)
+  |> Query_builder.execute session
+]}
+
+{1 Error Handling}
+
+{2 Always Handle Errors}
+
+{[
+let robust_query session =
+  match Session.run_records session
+    ~statement:"MATCH (u:User) RETURN u"
+    () with
+  | Ok records ->
+      (* Process records *)
+      Ok (List.length records)
+  | Error (Error.Database { code; message }) ->
+      Printf.eprintf "Database error %s: %s\n" code message;
+      Error (Error.Database { code; message })
+  | Error (Error.Io msg) ->
+      Printf.eprintf "I/O error: %s\n" msg;
+      Error (Error.Io msg)
+  | Error e ->
+      Printf.eprintf "Error: %s\n" (Error.to_string e);
+      Error e
+]}
+
+{2 Use Transaction DSL for Complex Operations}
+
+{[
+let complex_operation session =
+  let open Transaction_dsl in
+
+  exec_query_builder_unit (Query_builder.raw "CREATE ...")
+  |> catch (fun err ->
+      (* Handle specific errors *)
+      match err with
+      | Error.Database { code = "Neo.ClientError.Schema.ConstraintValidationFailed"; _ } ->
+          (* Constraint violation - try alternative *)
+          exec_query_builder_unit (Query_builder.raw "MERGE ...")
+      | _ ->
+          fail err
+    )
+  |> fun tx -> Session.transact session tx
+]}
+
+{1 Resource Management}
+
+{2 Use with_session}
+
+{[
+(* Good: Automatic cleanup *)
+let good env cfg =
+  Eio.Switch.run @@ fun sw ->
+    Session.with_session ~sw ~net:env#net cfg (fun session ->
+      (* Use session *)
+      Session.run_records session ~statement:"MATCH (n) RETURN n" ()
+    )
+
+(* Bad: Manual session management *)
+let bad env cfg =
+  (* Difficult to ensure cleanup on errors *)
+  failwith "Use with_session instead"
+]}
+
+{2 Keep Transactions Short}
+
+{[
+(* Good: Quick transaction *)
+let good session data =
+  Session.transact session
+    (Transaction_dsl.exec_query_builder_unit
+      (Query_builder.raw "CREATE ..." |> Query_builder.with_params data))
+
+(* Bad: Long-running transaction *)
+let bad session =
+  Session.transact session (
+    let open Transaction_dsl in
+    let* rows = exec_query_builder (Query_builder.raw "MATCH ...") in
+    (* Don't do expensive computation inside transaction *)
+    let processed = expensive_computation rows in
+    exec_query_builder_unit (Query_builder.raw "CREATE ...")
+  )
+]}
+
+{1 Memory Management}
+
+{2 Process Streams Incrementally}
+
+{[
+let good session =
+  match Session.run_stream_records session
+    ~statement:"MATCH (n) RETURN n"
+    ~fetch_size:1000L
+    () with
+  | Error e -> Error e
+  | Ok stream ->
+      let rec process count =
+        match Session.stream_pull_records stream 1000L with
+        | Error e -> Error e
+        | Ok [] when stream.exhausted -> Ok count
+        | Ok records ->
+            (* Process batch and discard *)
+            List.iter handle_record records;
+            process (count + List.length records)
+      in
+      process 0
+]}
+
+{2 Choose Appropriate Fetch Sizes}
+
+{[
+(* For memory-constrained environments *)
+let small_fetch = 100L
+
+(* For high-throughput processing *)
+let large_fetch = 10000L
+
+(* Balanced default *)
+let default_fetch = 1000L
+]}
+
+{1 Testing}
+
+{2 Use Environment Configuration}
+
+{[
+let test_config () =
+  Config.of_env ()  (* Read from NEO4J_* env vars *)
+
+let production_config () =
+  Config.{
+    uri = "bolt://production-host:7687";
+    user = "app_user";
+    password = read_from_vault ();
+    max_pool_size = 50;
+    connection_timeout = 30.0;
+    log_level = Info;
+  }
+]}
+
+{2 Clean Up Test Data}
+
+{[
+let test_user_creation env cfg =
+  Eio.Switch.run @@ fun sw ->
+    Session.with_session ~sw ~net:env#net cfg (fun session ->
+      let label = Printf.sprintf "TestUser_%d" (Random.int 1000000) in
+
+      (* Run test *)
+      let result = Query_builder.raw
+        (Printf.sprintf "CREATE (u:%s {name: $name})" label)
+      |> Query_builder.with_params [("name", Value.Text "Alice")]
+      |> Query_builder.execute_unit session in
+
+      (* Clean up *)
+      let _ = Query_builder.raw
+        (Printf.sprintf "MATCH (n:%s) DELETE n" label)
+      |> Query_builder.execute_unit session in
+
+      result
+    )
+]}
+
+{1 Deployment}
+
+{2 Connection Pooling}
+
+{[
+let configure_pool () =
+  Config.{
+    uri = "bolt://localhost:7687";
+    user = "neo4j";
+    password = "password";
+    max_pool_size = 50;  (* Tune based on concurrent requests *)
+    connection_timeout = 30.0;
+    log_level = Info;
+  }
+]}
+
+{2 Monitoring}
+
+{[
+(* Log slow queries *)
+let monitored_query session statement =
+  let start = Unix.gettimeofday () in
+  let result = Session.run_records session ~statement () in
+  let duration = Unix.gettimeofday () -. start in
+
+  if duration > 1.0 then
+    Printf.eprintf "Slow query (%.2fs): %s\n" duration statement;
+
+  result
+]}
+
+{2 Graceful Shutdown}
+
+{[
+let run_app () =
+  Eio_main.run @@ fun env ->
+    let cfg = Config.of_env () in
+
+    Eio.Switch.run @@ fun sw ->
+      (* Server loop using sessions *)
+      Session.with_session ~sw ~net:env#net cfg (fun session ->
+        (* Handle requests *)
+        serve_requests session
+      )
+    (* Switch cleanup happens automatically *)
+]}
+
+{1 See Also}
+
+- {{!page-"pipelines"}Pipelines}
+- {{!page-"transactions"}Transactions}
+- {{!page-"streaming"}Streaming}

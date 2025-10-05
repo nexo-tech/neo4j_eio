@@ -1,9 +1,13 @@
-(* Record abstraction for Neo4j query results *)
+(** Record abstraction for Neo4j query results.
 
-(* A record is an ordered map from string keys to values *)
+    A record is a string-keyed map of {!Value.value} as returned by Cypher
+    queries. This module provides type-directed decoders and field accessors
+    that return precise errors on mismatch. *)
+
+(** A record is an ordered map from string keys to values. *)
 type t = Value.value Value.StringMap.t
 
-(* Decode errors *)
+(** Decode errors describing why a value could not be decoded. *)
 type decode_error =
   | NotNull
   | NotBool
@@ -30,8 +34,10 @@ type decode_error =
   | KeyNotFound of string
 
 val pp_decode_error : Format.formatter -> decode_error -> unit
+(** Pretty printer for decode errors. *)
 
-(* Type-directed decoders - exact variants return Result *)
+(** {1 Type-directed decoders}
+    Exact variants return [Result]. *)
 
 val exact_unit : Value.value -> (unit, decode_error) result
 val exact_bool : Value.value -> (bool, decode_error) result
@@ -57,7 +63,7 @@ val exact_datetime_zone_id : Value.value -> (Value.datetime_zone_id, decode_erro
 val exact_datetime_offset : Value.value -> (Value.datetime_offset, decode_error) result
 val exact_value : Value.value -> (Value.value, decode_error) result
 
-(* Maybe variants return None instead of Error *)
+(** Maybe variants return [None] instead of [Error]. *)
 val maybe_exact_unit : Value.value -> unit option
 val maybe_exact_bool : Value.value -> bool option
 val maybe_exact_int : Value.value -> int64 option
@@ -82,7 +88,8 @@ val maybe_exact_datetime_zone_id : Value.value -> Value.datetime_zone_id option
 val maybe_exact_datetime_offset : Value.value -> Value.datetime_offset option
 val maybe_exact_value : Value.value -> Value.value option
 
-(* Record field accessors - at variants look up key then decode *)
+(** {1 Record field accessors}
+    [at_*] variants look up a key then decode. *)
 
 val at_unit : t -> string -> (unit, decode_error) result
 val at_bool : t -> string -> (bool, decode_error) result
@@ -108,7 +115,8 @@ val at_datetime_zone_id : t -> string -> (Value.datetime_zone_id, decode_error) 
 val at_datetime_offset : t -> string -> (Value.datetime_offset, decode_error) result
 val at_value : t -> string -> (Value.value, decode_error) result
 
-(* Maybe_at variants return None if key not found, or decode error on type mismatch *)
+(** [maybe_at_*] variants return [None] if key not found; type mismatch still
+    returns an error. *)
 val maybe_at_unit : t -> string -> (unit option, decode_error) result
 val maybe_at_bool : t -> string -> (bool option, decode_error) result
 val maybe_at_int : t -> string -> (int64 option, decode_error) result
@@ -133,6 +141,6 @@ val maybe_at_datetime_zone_id : t -> string -> (Value.datetime_zone_id option, d
 val maybe_at_datetime_offset : t -> string -> (Value.datetime_offset option, decode_error) result
 val maybe_at_value : t -> string -> (Value.value option, decode_error) result
 
-(* Helper constructors *)
+(** Helper constructors. *)
 val empty : t
 val of_list : (string * Value.value) list -> t

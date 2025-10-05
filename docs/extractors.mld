@@ -1,0 +1,149 @@
+{0 Data Extractors}
+
+Extractors provide type-safe, composable data extraction from Neo4j records. They use applicative functors to combine multiple field extractors.
+
+{1 Basic Extractors}
+
+{!Neo4j_eio.Extract} module provides extractors for all Neo4j types:
+
+{[
+open Neo4j_eio
+
+(* Simple field extraction *)
+let name_extractor = Extract.text "name"
+let age_extractor = Extract.int "age"
+let active_extractor = Extract.bool "active"
+]}
+
+{1 Combining Extractors}
+
+Use applicative operators to combine extractors:
+
+{[
+(* Extract a pair *)
+let user_extractor = Extract.(pair (text "name") (int "age"))
+
+(* Extract a triple *)
+let person_extractor = Extract.(
+  triple (text "name") (int "age") (text "email")
+)
+
+(* Extract into a record *)
+type user = { name: string; age: int64; email: string }
+
+let user_extractor = Extract.(
+  let+ name = text "name"
+  and+ age = int "age"
+  and+ email = text "email" in
+  { name; age; email }
+)
+]}
+
+{1 Optional Fields}
+
+Handle optional fields with maybe_* variants:
+
+{[
+let user_with_optional = Extract.(
+  let+ name = text "name"
+  and+ age = maybe_int "age"
+  and+ email = maybe_text "email" in
+  (name, age, email)
+)
+]}
+
+{1 Graph Entities}
+
+Extract nodes, relationships, and paths:
+
+{[
+(* Extract a node *)
+let node_extractor = Extract.node "n"
+
+(* Extract a relationship *)
+let rel_extractor = Extract.relationship "r"
+
+(* Extract a path *)
+let path_extractor = Extract.path "p"
+
+(* Extract node properties *)
+let user_from_node = Extract.(
+  node "u" >>= fun node_val ->
+  match node_val with
+  | Value.Node node ->
+      let name = StringMap.find "name" node.properties in
+      return name
+  | _ -> fail "Expected node"
+)
+]}
+
+{1 Lists and Collections}
+
+{[
+(* Extract a list of values *)
+let tags_extractor = Extract.list_of (Extract.text)
+
+(* Extract a list and transform *)
+let process_list = Extract.(
+  list_of (pair (text "name") (int "count"))
+  >>= fun items ->
+  return (List.filter (fun (_, count) -> count > 10L) items)
+)
+]}
+
+{1 Complex Example}
+
+{[
+type address = {
+  street: string;
+  city: string;
+  zip: string option;
+}
+
+type user = {
+  id: int64;
+  name: string;
+  email: string option;
+  addresses: address list;
+}
+
+let address_extractor = Extract.(
+  let+ street = text "street"
+  and+ city = text "city"
+  and+ zip = maybe_text "zip" in
+  { street; city; zip }
+)
+
+let user_extractor = Extract.(
+  let+ id = int "id"
+  and+ name = text "name"
+  and+ email = maybe_text "email"
+  and+ addresses = list_of address_extractor in
+  { id; name; email; addresses }
+)
+
+(* Use with Cypher pipeline *)
+let get_users session =
+  Cypher.(
+    query "MATCH (u:User) RETURN u.id, u.name, u.email, u.addresses"
+    |> extract user_extractor
+    |> run session
+  )
+]}
+
+{1 Error Handling}
+
+Extractors fail with descriptive errors:
+
+{[
+let safe_extract record =
+  match Extract.run (Extract.text "name") record with
+  | Ok name -> Printf.printf "Name: %s\n" name
+  | Error err -> Printf.eprintf "Extraction failed: %s\n" (Error.to_string err)
+]}
+
+{1 See Also}
+
+- {!Neo4j_eio.Extract} - Full extractor API
+- {!Neo4j_eio.Record} - Record accessors
+- {{!page-"pipelines"}Pipeline Guide}

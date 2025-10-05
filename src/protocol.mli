@@ -1,3 +1,4 @@
+(** Negotiated Bolt protocol version. *)
 type version =
   | V1
   | V2
@@ -7,18 +8,29 @@ type version =
   | Unknown of int * int  (* major, minor *)
 
 val classify : int32 -> version
-val major_minor : int32 -> int * int
-val supports_logon : version -> bool   (* v5.x *)
-val uses_pull_discard : version -> bool (* v3+ *)
-val is_new_version : version -> bool   (* v3+ like hasbolt *)
-val pp_version : version -> string
+(** Convert a 32-bit wire version to a typed version. *)
 
-(* Chunked message framing *)
+val major_minor : int32 -> int * int
+(** Extract major/minor from a 32-bit version. *)
+
+val supports_logon : version -> bool
+(** [true] if version supports LOGON (Bolt v5.x). *)
+
+val uses_pull_discard : version -> bool
+(** [true] if version uses PULL/DISCARD (Bolt v3+). *)
+
+val is_new_version : version -> bool
+(** [true] for Bolt v3+ (hasbolt compatibility predicate). *)
+
+val pp_version : version -> string
+(** Pretty printer for versions. *)
+
+(** Chunked message framing *)
 val max_chunk_size : int
 val chunk_message : string -> string
 val dechunk_message : (int -> string) -> string
 
-(* Message codes *)
+(** Message codes *)
 type message_code =
   | HELLO | GOODBYE | RESET | RUN | DISCARD | PULL
   | BEGIN | COMMIT | ROLLBACK | LOGON
@@ -27,14 +39,14 @@ val message_code_to_int : message_code -> int
 val message_code_of_int : int -> message_code option
 val pp_message_code : message_code -> string
 
-(* Response codes *)
+(** Response codes *)
 type response_code =
   | SUCCESS | RECORD | IGNORED | FAILURE
 
 val response_code_of_int : int -> response_code option
 val pp_response_code : response_code -> string
 
-(* Message builders *)
+(** Message builders *)
 val build_hello : user:string -> password:string -> user_agent:string -> string
 val build_goodbye : unit -> string
 val build_reset : unit -> string

@@ -1,6 +1,7 @@
 module StringMap : Map.S with type key = string
+(** String-keyed map used for value maps and records. *)
 
-(* Temporal and spatial types from PackStream v2 / Neo4j 3.4+ *)
+(** Temporal and spatial types from PackStream v2 / Neo4j 3.4+. *)
 type point2d = { srid : int64; x : float; y : float }
 type point3d = { srid : int64; x : float; y : float; z : float }
 
@@ -18,7 +19,7 @@ type local_datetime = { seconds_since_epoch : int64; nanoseconds : int64 }
 type datetime_zone_id = { seconds_since_epoch : int64; nanoseconds : int64; timezone_id : string }
 type datetime_offset = { seconds_since_epoch : int64; nanoseconds : int64; timezone_offset_seconds : int64 }
 
-(* Core value type *)
+(** Core value type mirrored from Neo4j PackStream. *)
 type value =
   | Null
   | Bool of bool
@@ -59,10 +60,10 @@ and urelationship = { urel_id : int64; urel_type : string; urel_props : value St
 
 and path = { path_nodes : node list; path_rels : urelationship list; path_seq : int list }
 
-(* Record type - a row returned from a query with named fields *)
+(** Record type - a row returned from a query with named fields. *)
 type record = value StringMap.t
 
-(* Pretty printers for debugging *)
+(** Pretty printers for debugging. *)
 val pp_point2d : Format.formatter -> point2d -> unit
 val pp_point3d : Format.formatter -> point3d -> unit
 val pp_duration : Format.formatter -> duration -> unit
@@ -78,7 +79,7 @@ val pp_urelationship : Format.formatter -> urelationship -> unit
 val pp_path : Format.formatter -> path -> unit
 val pp_value : Format.formatter -> value -> unit
 
-(* Helper constructors for building values *)
+(** Helper constructors for building values. *)
 val null : value
 val bool : bool -> value
 val int : int64 -> value
@@ -90,5 +91,5 @@ val bytes : string -> value
 val list : value list -> value
 val map : value StringMap.t -> value
 
-(* Record helper - extract a value by field name *)
+(** Record helper - extract a value by field name. *)
 val at : record -> string -> value option

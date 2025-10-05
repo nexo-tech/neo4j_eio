@@ -1,0 +1,217 @@
+{0 Transactions}
+
+Neo4j transactions ensure ACID properties for graph operations. neo4j_eio provides both explicit transaction control and a monadic Transaction DSL.
+
+{1 Explicit Transactions}
+
+{2 Basic Usage}
+
+{[
+open Neo4j_eio
+
+let transfer_with_explicit session =
+  match Session.begin_transaction session with
+  | Error e -> Error e
+  | Ok () ->
+      (* Execute queries in transaction *)
+      match Session.run session ~statement:"UPDATE account SET balance = ..." () with
+      | Error e ->
+          let _ = Session.rollback session in
+          Error e
+      | Ok _ ->
+          Session.commit session
+]}
+
+{2 Helper Function}
+
+The {!Neo4j_eio.Session.transact} function handles begin/commit/rollback automatically:
+
+{[
+let transact session f =
+  match Session.begin_transaction session with
+  | Error e -> Error e
+  | Ok () ->
+      match f session with
+      | Ok result ->
+          (match Session.commit session with
+          | Ok () -> Ok result
+          | Error e -> Error e)
+      | Error e ->
+          let _ = Session.rollback session in
+          Error e
+]}
+
+{1 Transaction DSL}
+
+The {!Neo4j_eio.Transaction_dsl} module provides monadic composition:
+
+{2 Basic Operations}
+
+{[
+open Transaction_dsl
+
+(* Return a value *)
+let tx1 = return 42
+
+(* Execute a query *)
+let tx2 =
+  exec_query_builder
+    (Query_builder.raw "CREATE (u:User {name: $name})"
+     |> Query_builder.with_params [("name", Value.Text "Alice")])
+
+(* Execute a query expecting unit *)
+let tx3 =
+  exec_query_builder_unit
+    (Query_builder.raw "CREATE (u:User {name: $name})"
+     |> Query_builder.with_params [("name", Value.Text "Bob")])
+]}
+
+{2 Sequencing with let*}
+
+{[
+let create_and_link =
+  let* user_rows = exec_query_builder
+    (Query_builder.raw "CREATE (u:User {name: $name}) RETURN u"
+     |> Query_builder.with_params [("name", Value.Text "Alice")])
+  in
+  let* team_rows = exec_query_builder
+    (Query_builder.raw "CREATE (t:Team {name: $name}) RETURN t"
+     |> Query_builder.with_params [("name", Value.Text "Engineering")])
+  in
+  exec_query_builder_unit
+    (Query_builder.raw "MATCH (u:User), (t:Team) WHERE ... CREATE (u)-[:MEMBER_OF]->(t)")
+]}
+
+{2 Parallel Composition with and+}
+
+Execute independent queries in parallel (results combined):
+
+{[
+let parallel_queries =
+  let+ users = exec_query_builder (Query_builder.raw "MATCH (u:User) RETURN u")
+  and+ teams = exec_query_builder (Query_builder.raw "MATCH (t:Team) RETURN t") in
+  (users, teams)
+]}
+
+{2 Error Handling}
+
+{[
+(* Catch errors *)
+let safe_tx =
+  exec_query_builder_unit (Query_builder.raw "INVALID CYPHER")
+  |> catch (fun err ->
+      (* Log error and provide default *)
+      Printf.eprintf "Query failed: %s\n" (Error.to_string err);
+      return ()
+    )
+
+(* Conditional execution *)
+let conditional =
+  when_ (some_condition) (
+    exec_query_builder_unit (Query_builder.raw "CREATE ...")
+  )
+
+(* Fail with custom error *)
+let validate_and_create name =
+  if String.length name < 3 then
+    fail (Error.ClientError {
+      code = "Validation.NameTooShort";
+      message = "Name must be at least 3 characters"
+    })
+  else
+    exec_query_builder_unit
+      (Query_builder.raw "CREATE (u:User {name: $name})"
+       |> Query_builder.with_params [("name", Value.Text name)])
+]}
+
+{1 Complete Example}
+
+{[
+type user = { id: int64; name: string; email: string }
+type team = { id: int64; name: string }
+
+let create_user_and_team name email team_name =
+  let open Transaction_dsl in
+
+  (* Create user *)
+  let* user_rows = exec_query_builder
+    (Query_builder.raw "CREATE (u:User {name: $name, email: $email}) RETURN u.id AS id"
+     |> Query_builder.with_params [
+         ("name", Value.Text name);
+         ("email", Value.Text email)
+       ])
+  in
+
+  let user_id = match user_rows with
+    | [r] -> Record.at_int r "id"
+    | _ -> failwith "Expected one user"
+  in
+
+  (* Create team *)
+  let* team_rows = exec_query_builder
+    (Query_builder.raw "CREATE (t:Team {name: $name}) RETURN t.id AS id"
+     |> Query_builder.with_params [("name", Value.Text team_name)])
+  in
+
+  let team_id = match team_rows with
+    | [r] -> Record.at_int r "id"
+    | _ -> failwith "Expected one team"
+  in
+
+  (* Link user to team *)
+  let* _ = exec_query_builder_unit
+    (Query_builder.raw
+      "MATCH (u:User {id: $user_id}), (t:Team {id: $team_id})
+       CREATE (u)-[:MEMBER_OF]->(t)"
+     |> Query_builder.with_params [
+         ("user_id", Value.Int user_id);
+         ("team_id", Value.Int team_id)
+       ])
+  in
+
+  return { id = user_id; name; email }, { id = team_id; name = team_name }
+
+(* Execute the transaction *)
+let run_example session =
+  Session.transact session
+    (create_user_and_team "Alice" "alice@example.com" "Engineering")
+]}
+
+{1 Best Practices}
+
+{2 Keep Transactions Short}
+
+{[
+(* Good: Quick transaction *)
+let good =
+  let* _ = exec_query_builder_unit (Query_builder.raw "CREATE ...") in
+  return ()
+
+(* Bad: Long-running computation in transaction *)
+let bad =
+  let* rows = exec_query_builder (Query_builder.raw "MATCH ...") in
+  (* Don't do expensive computation here *)
+  let processed = expensive_processing rows in
+  exec_query_builder_unit (Query_builder.raw "CREATE ...")
+]}
+
+{2 Separate Read and Write Transactions}
+
+{[
+(* Read transaction *)
+let read_data session =
+  Session.transact session
+    (exec_query_builder (Query_builder.raw "MATCH (u:User) RETURN u"))
+
+(* Write transaction *)
+let write_data session data =
+  Session.transact session
+    (exec_query_builder_unit
+      (Query_builder.raw "CREATE ..." |> Query_builder.with_params data))
+]}
+
+{1 See Also}
+
+- {!Neo4j_eio.Transaction_dsl} - Transaction DSL API
+- {!Neo4j_eio.Session.transact} - Transaction helper
+- {!Neo4j_eio.Session.begin_transaction} - Explicit transaction control

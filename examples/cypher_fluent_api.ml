@@ -216,7 +216,7 @@ let example_count session =
 
   match result with
   | Ok n ->
-      Printf.printf "  Count: %d\n" n;
+      Printf.printf "  Count: %Ld\n" n;
       Printf.printf "  ✓ count works!\n"
   | Error e ->
       Printf.eprintf "  ✗ Query failed: %s\n" (Error.to_string e)

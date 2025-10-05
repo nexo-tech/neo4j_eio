@@ -24,19 +24,29 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
-      - name: Setup mdBook
-        uses: peaceiris/actions-mdbook@v1
+      - name: Setup OCaml
+        uses: ocaml/setup-ocaml@v2
         with:
-          mdbook-version: 'latest'
+          ocaml-compiler: 5.2.x
+          dune-cache: true
+
+      - name: Install dependencies
+        run: |
+          opam install . --deps-only --with-doc --yes
 
       - name: Build documentation
         run: |
-          cd docs
-          mdbook build
+          opam exec -- dune build @doc
+
+      - name: Prepare docs for upload
+        run: |
+          mkdir -p _site
+          cp -r _build/default/_doc/_html/* _site/
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./docs/book
+          path: ./_site
 
   deploy:
     environment:

@@ -1,0 +1,200 @@
+{0 Streaming Results}
+
+For large result sets, streaming allows you to process records incrementally without loading everything into memory.
+
+{1 Basic Streaming}
+
+{!Neo4j_eio.Session.run_stream} returns a stream that you can consume:
+
+{[
+open Neo4j_eio
+
+let process_large_dataset session =
+  match Session.run_stream session
+    ~statement:"MATCH (n:User) RETURN n"
+    ~fetch_size:1000L
+    () with
+  | Error e -> Error e
+  | Ok stream ->
+      let rec consume acc =
+        match Session.stream_pull stream 1000L with
+        | Error e -> Error e
+        | Ok [] when stream.exhausted -> Ok acc
+        | Ok records ->
+            (* Process batch *)
+            let processed = List.map process_record records in
+            consume (processed @ acc)
+      in
+      consume []
+]}
+
+{1 Record Streaming}
+
+{!Neo4j_eio.Session.run_stream_records} provides typed record access:
+
+{[
+let stream_users session =
+  match Session.run_stream_records session
+    ~statement:"MATCH (u:User) RETURN u.name AS name, u.age AS age"
+    ~fetch_size:500L
+    () with
+  | Error e -> Error e
+  | Ok stream ->
+      let rec process count =
+        match Session.stream_pull_records stream 500L with
+        | Error e -> Error e
+        | Ok [] when stream.exhausted -> Ok count
+        | Ok records ->
+            List.iter (fun r ->
+              let name = Record.at_text r "name" in
+              let age = Record.at_int r "age" in
+              Printf.printf "%s: %Ld\n" name age
+            ) records;
+            process (count + List.length records)
+      in
+      process 0
+]}
+
+{1 Stream to List Helper}
+
+Convert a stream to a list (use only for moderate-sized results):
+
+{[
+let get_all_users session =
+  match Session.run_stream session
+    ~statement:"MATCH (u:User) RETURN u"
+    () with
+  | Error e -> Error e
+  | Ok stream -> Session.stream_to_list stream
+]}
+
+{1 Fetch Size}
+
+Control memory usage with fetch_size:
+
+{[
+(* Small batches for memory-constrained environments *)
+let small_batches session =
+  Session.run_stream session
+    ~statement:"MATCH (n) RETURN n"
+    ~fetch_size:100L  (* Fetch 100 records at a time *)
+    ()
+
+(* Larger batches for better throughput *)
+let large_batches session =
+  Session.run_stream session
+    ~statement:"MATCH (n) RETURN n"
+    ~fetch_size:10000L
+    ()
+]}
+
+{1 Processing Patterns}
+
+{2 Accumulating Results}
+
+{[
+let sum_all_ages session =
+  match Session.run_stream_records session
+    ~statement:"MATCH (u:User) RETURN u.age AS age"
+    ~fetch_size:1000L
+    () with
+  | Error e -> Error e
+  | Ok stream ->
+      let rec sum_ages total =
+        match Session.stream_pull_records stream 1000L with
+        | Error e -> Error e
+        | Ok [] when stream.exhausted -> Ok total
+        | Ok records ->
+            let batch_sum = List.fold_left (fun acc r ->
+              Int64.add acc (Record.at_int r "age")
+            ) 0L records in
+            sum_ages (Int64.add total batch_sum)
+      in
+      sum_ages 0L
+]}
+
+{2 Filtering While Streaming}
+
+{[
+let filter_and_collect session =
+  match Session.run_stream_records session
+    ~statement:"MATCH (u:User) RETURN u.name AS name, u.score AS score"
+    ~fetch_size:500L
+    () with
+  | Error e -> Error e
+  | Ok stream ->
+      let rec collect acc =
+        match Session.stream_pull_records stream 500L with
+        | Error e -> Error e
+        | Ok [] when stream.exhausted -> Ok (List.rev acc)
+        | Ok records ->
+            let high_scorers = List.filter_map (fun r ->
+              let score = Record.at_int r "score" in
+              if score > 100L then
+                Some (Record.at_text r "name")
+              else
+                None
+            ) records in
+            collect (List.rev_append high_scorers acc)
+      in
+      collect []
+]}
+
+{2 Side Effects (Logging, Export)}
+
+{[
+let export_to_file session filename =
+  let oc = open_out filename in
+  Fun.protect ~finally:(fun () -> close_out oc) @@ fun () ->
+    match Session.run_stream_records session
+      ~statement:"MATCH (u:User) RETURN u.name, u.email"
+      ~fetch_size:1000L
+      () with
+    | Error e -> Error e
+    | Ok stream ->
+        let rec export () =
+          match Session.stream_pull_records stream 1000L with
+          | Error e -> Error e
+          | Ok [] when stream.exhausted -> Ok ()
+          | Ok records ->
+              List.iter (fun r ->
+                let name = Record.at_text r "name" in
+                let email = Record.at_text r "email" in
+                Printf.fprintf oc "%s,%s\n" name email
+              ) records;
+              export ()
+        in
+        export ()
+]}
+
+{1 Memory Considerations}
+
+{2 Good: Stream large datasets}
+
+{[
+let good_large_query session =
+  (* Only keeps one batch in memory at a time *)
+  Session.run_stream session
+    ~statement:"MATCH (n) RETURN n"
+    ~fetch_size:1000L
+    ()
+  |> Result.bind (fun stream ->
+      Session.stream_to_list stream
+    )
+]}
+
+{2 Bad: Materialized all at once}
+
+{[
+let bad_large_query session =
+  (* Loads everything into memory *)
+  Session.run_records session
+    ~statement:"MATCH (n) RETURN n"
+    ()
+]}
+
+{1 See Also}
+
+- {!Neo4j_eio.Session.run_stream} - Create a stream
+- {!Neo4j_eio.Session.stream_pull} - Pull next batch
+- {!Neo4j_eio.Session.stream_to_list} - Materialize entire stream

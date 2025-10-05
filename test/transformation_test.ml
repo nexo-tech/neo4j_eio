@@ -190,14 +190,14 @@ let test_min_max env cfg =
       let min_result = Cypher.(
         query (Printf.sprintf "UNWIND [5, 2, 8, 1, 9] AS n CREATE (p:%s {value: n}) RETURN p.value AS value" label)
         |> extract Extract.(int "value")
-        |> min_by Int64.compare
+        |> min_by (fun x -> x)
         |> run_in session
       ) in
 
       let max_result = Cypher.(
         query (Printf.sprintf "MATCH (p:%s) RETURN p.value AS value" label)
         |> extract Extract.(int "value")
-        |> max_by Int64.compare
+        |> max_by (fun x -> x)
         |> run_in session
       ) in
 
@@ -245,7 +245,7 @@ let test_deduplicate env cfg =
       let result = Cypher.(
         query (Printf.sprintf "UNWIND [1, 2, 2, 3, 1, 4, 3] AS n CREATE (p:%s {value: n}) RETURN p.value AS value" label)
         |> extract Extract.(int "value")
-        |> deduplicate_by (=)
+        |> deduplicate_by (fun x -> x)
         |> run_in session
       ) in
 

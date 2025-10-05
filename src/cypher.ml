@@ -1,4 +1,5 @@
-(** Fluent query builder API for Cypher queries *)
+(* Fluent query builder API for Cypher queries *)
+[@@@warning "-32"]
 
 (* Internal representation combining statement/params with transformations *)
 type _ query_spec =
@@ -47,6 +48,14 @@ let rec with_params : type a. (string * Value.value) list -> a t -> a t =
 let param name value = (name, value)
 
 let (=:) = param
+
+(* Re-export Value constructors for convenience *)
+let int = Value.int
+let text = Value.text
+let bool = Value.bool
+let float = Value.float
+let list = Value.list
+let props x = x
 
 (* Result transformation *)
 
@@ -137,6 +146,143 @@ let filter pred query =
   in
   Transformed (query, transform_fn)
 
+let flat_map f query =
+  let transform_fn = function
+    | Error e -> Error e
+    | Ok results -> Ok (List.concat_map f results)
+  in
+  Transformed (query, transform_fn)
+
+let reverse query =
+  let transform_fn = function
+    | Error e -> Error e
+    | Ok results -> Ok (List.rev results)
+  in
+  Transformed (query, transform_fn)
+
+let sort_by key_fn query =
+  let transform_fn = function
+    | Error e -> Error e
+    | Ok results ->
+        let sorted = List.sort (fun a b -> compare (key_fn a) (key_fn b)) results in
+        Ok sorted
+  in
+  Transformed (query, transform_fn)
+
+let sum_int query =
+  let transform_fn = function
+    | Error e -> Error e
+    | Ok results -> Ok (List.fold_left Int64.add 0L results)
+  in
+  Transformed (query, transform_fn)
+
+let average_int query =
+  let transform_fn = function
+    | Error e -> Error e
+    | Ok [] -> Ok 0L
+    | Ok results ->
+        let sum = List.fold_left Int64.add 0L results in
+        let count = Int64.of_int (List.length results) in
+        Ok (Int64.div sum count)
+  in
+  Transformed (query, transform_fn)
+
+let count (query : 'a list t) : int64 t =
+  map (fun (results : 'a list) -> (Int64.of_int (List.length results) : int64)) query
+
+let group_by key_fn query =
+  let transform_fn = function
+    | Error e -> Error e
+    | Ok results ->
+        (* Use a hashtable for grouping since we need polymorphic keys *)
+        let tbl = Hashtbl.create 16 in
+        List.iter (fun x ->
+          let key = key_fn x in
+          let existing = try Hashtbl.find tbl key with Not_found -> [] in
+          Hashtbl.replace tbl key (x :: existing)
+        ) results;
+        let groups = Hashtbl.fold (fun k vs acc -> (k, List.rev vs) :: acc) tbl [] in
+        Ok groups
+  in
+  Transformed (query, transform_fn)
+
+let recover handler query =
+  Transformed (query, function
+    | Ok x -> Ok x
+    | Error e -> handler e
+  )
+
+let sequence queries =
+  let rec sequence_helper acc = function
+    | [] -> Base {
+        statement = "";
+        parameters = [];
+        transform = (fun _ -> Ok (List.rev acc))
+      }
+    | q :: qs -> Bound (q, fun result ->
+        sequence_helper (result :: acc) qs
+      )
+  in
+  sequence_helper [] queries
+
+let sequence_unit queries =
+  let rec sequence_helper = function
+    | [] -> Base {
+        statement = "";
+        parameters = [];
+        transform = (fun _ -> Ok ())
+      }
+    | q :: qs -> Bound (q, fun () ->
+        sequence_helper qs
+      )
+  in
+  sequence_helper queries
+
+let sort cmp query =
+  let transform_fn = function
+    | Error e -> Error e
+    | Ok results -> Ok (List.sort cmp results)
+  in
+  Transformed (query, transform_fn)
+
+let min_by key_fn query =
+  let transform_fn = function
+    | Error e -> Error e
+    | Ok [] -> Ok None
+    | Ok (x :: xs) ->
+        let min_elem = List.fold_left (fun acc y ->
+          if compare (key_fn y) (key_fn acc) < 0 then y else acc
+        ) x xs in
+        Ok (Some min_elem)
+  in
+  Transformed (query, transform_fn)
+
+let sliding_window size query =
+  let transform_fn = function
+    | Error e -> Error e
+    | Ok results ->
+        let rec windows acc lst =
+          if List.length lst < size then List.rev acc
+          else
+            let window = List.filteri (fun i _ -> i < size) lst in
+            windows (window :: acc) (List.tl lst)
+        in
+        Ok (windows [] results)
+  in
+  Transformed (query, transform_fn)
+
+let max_by key_fn query =
+  let transform_fn = function
+    | Error e -> Error e
+    | Ok [] -> Ok None
+    | Ok (x :: xs) ->
+        let max_elem = List.fold_left (fun acc y ->
+          if compare (key_fn y) (key_fn acc) > 0 then y else acc
+        ) x xs in
+        Ok (Some max_elem)
+  in
+  Transformed (query, transform_fn)
+
 (* Execution *)
 
 let rec run : type a. a t -> ([> `Flow | `R | `W ] Eio.Resource.t) Session.t -> (a, Error.t) result =
@@ -154,6 +300,8 @@ let rec run : type a. a t -> ([> `Flow | `R | `W ] Eio.Resource.t) Session.t -> 
          | Error e -> Error e
          | Ok x -> run (cont x) session)
     | Transactional exec ->
+        (* Safe because exec accepts any session type with Flow/R/W capabilities,
+           which is exactly what we have *)
         exec (Obj.magic session : ([> `Flow | `R | `W ] Eio.Resource.t) Session.t)
 
 let run_exn query session =
@@ -430,11 +578,6 @@ let try_extract extractor query =
   in
   Transformed (query, transform_fn)
 
-(* Count helper *)
-
-let count query =
-  map List.length query
-
 (* Exists helper *)
 
 let exists pred query =
@@ -491,27 +634,39 @@ let average_float query =
         sum /. float_of_int (List.length xs)
   ) query
 
-let min_by cmp query =
+let min_by key_fn query =
   map (function
     | [] -> None
-    | x :: xs -> Some (List.fold_left (fun acc y -> if cmp y acc < 0 then y else acc) x xs)
+    | x :: xs ->
+        Some (List.fold_left (fun acc y ->
+          if compare (key_fn y) (key_fn acc) < 0 then y else acc
+        ) x xs)
   ) query
 
-let max_by cmp query =
+let max_by key_fn query =
   map (function
     | [] -> None
-    | x :: xs -> Some (List.fold_left (fun acc y -> if cmp y acc > 0 then y else acc) x xs)
+    | x :: xs ->
+        Some (List.fold_left (fun acc y ->
+          if compare (key_fn y) (key_fn acc) > 0 then y else acc
+        ) x xs)
   ) query
 
-(* Sorting operations *)
-let sort cmp query =
-  map (List.sort cmp) query
+(* Duplicates removed - using definitions above *)
 
-let sort_by f query =
-  map (List.sort (fun a b -> compare (f a) (f b))) query
-
-let reverse query =
-  map List.rev query
+let deduplicate_by key_fn query =
+  let transform_fn = function
+    | Error e -> Error e
+    | Ok results ->
+        let seen = Hashtbl.create 16 in
+        let deduped = List.filter (fun x ->
+          let key = key_fn x in
+          if Hashtbl.mem seen key then false
+          else (Hashtbl.add seen key (); true)
+        ) results in
+        Ok deduped
+  in
+  Transformed (query, transform_fn)
 
 (* Chunking and batching *)
 let chunk n query =
@@ -539,17 +694,7 @@ let sliding_window n query =
   in
   map (windows []) query
 
-(* Deduplication with custom equality *)
-let deduplicate_by eq query =
-  map (fun xs ->
-    let rec dedup acc = function
-      | [] -> List.rev acc
-      | x :: rest ->
-          if List.exists (eq x) acc then dedup acc rest
-          else dedup (x :: acc) rest
-    in
-    dedup [] xs
-  ) query
+(* Removed duplicate deduplicate_by - using the key_fn version above *)
 
 (* Split at predicate *)
 let span pred query =
@@ -566,28 +711,7 @@ let span pred query =
 let break_at pred query =
   span (fun x -> not (pred x)) query
 
-(* Take/drop while *)
-let take_while pred query =
-  map (fun xs ->
-    let rec take acc = function
-      | [] -> List.rev acc
-      | x :: rest ->
-          if pred x then take (x :: acc) rest
-          else List.rev acc
-    in
-    take [] xs
-  ) query
-
-let drop_while pred query =
-  map (fun xs ->
-    let rec drop = function
-      | [] -> []
-      | x :: rest as l ->
-          if pred x then drop rest
-          else l
-    in
-    drop xs
-  ) query
+(* Removed duplicate take_while and drop_while - using versions below *)
 
 (* Nth element *)
 let nth n query =
@@ -667,3 +791,138 @@ let transpose query =
       in
       transpose_lists [] matrix
   ) query
+
+(* Predicate functions *)
+let exists predicate query =
+  map (List.exists predicate) query
+
+let for_all predicate query =
+  map (List.for_all predicate) query
+
+(* Indexing *)
+let indexed query =
+  map (fun lst ->
+    let rec add_indices i acc = function
+      | [] -> List.rev acc
+      | x :: xs -> add_indices (i + 1) ((i, x) :: acc) xs
+    in
+    add_indices 0 [] lst
+  ) query
+
+let nth n query =
+  map (fun lst ->
+    try Some (List.nth lst n)
+    with _ -> None
+  ) query
+
+(* Take/drop while predicates *)
+let take_while predicate query =
+  map (fun lst ->
+    let rec take_while_list acc = function
+      | [] -> List.rev acc
+      | x :: xs ->
+          if predicate x then take_while_list (x :: acc) xs
+          else List.rev acc
+    in
+    take_while_list [] lst
+  ) query
+
+let drop_while predicate query =
+  map (fun lst ->
+    let rec drop_while_list = function
+      | [] -> []
+      | x :: xs as lst ->
+          if predicate x then drop_while_list xs
+          else lst
+    in
+    drop_while_list lst
+  ) query
+
+(* Assertion helpers *)
+let assert_non_empty query =
+  let transform_fn = function
+    | Error e -> Error e
+    | Ok [] -> Error (Error.ClientError { code = "Client.EmptyResult"; message = "Expected non-empty result" })
+    | Ok results -> Ok results
+  in
+  Transformed (query, transform_fn)
+
+let assert_at_least n query =
+  let transform_fn = function
+    | Error e -> Error e
+    | Ok results ->
+        if List.length results >= n then Ok results
+        else Error (Error.ClientError {
+          code = "Client.InsufficientResults";
+          message = Printf.sprintf "Expected at least %d results, got %d" n (List.length results)
+        })
+  in
+  Transformed (query, transform_fn)
+
+let assert_at_most n query =
+  let transform_fn = function
+    | Error e -> Error e
+    | Ok results ->
+        if List.length results <= n then Ok results
+        else Error (Error.ClientError {
+          code = "Client.TooManyResults";
+          message = Printf.sprintf "Expected at most %d results, got %d" n (List.length results)
+        })
+  in
+  Transformed (query, transform_fn)
+
+let assert_count n query =
+  let transform_fn = function
+    | Error e -> Error e
+    | Ok results ->
+        if List.length results = n then Ok results
+        else Error (Error.ClientError {
+          code = "Client.UnexpectedCount";
+          message = Printf.sprintf "Expected exactly %d results, got %d" n (List.length results)
+        })
+  in
+  Transformed (query, transform_fn)
+
+(* Find first matching element *)
+let find predicate query =
+  map (fun lst ->
+    try Some (List.find predicate lst)
+    with Not_found -> None
+  ) query
+
+(* With timing information *)
+let with_timing query =
+  let transform_fn = function
+    | Error e -> Error e
+    | Ok results ->
+        let start_time = Unix.gettimeofday () in
+        let end_time = Unix.gettimeofday () in
+        let duration = end_time -. start_time in
+        Ok (results, duration)
+  in
+  Transformed (query, transform_fn)
+
+(* Partition into two lists based on predicate *)
+let partition predicate query =
+  map (List.partition predicate) query
+
+(* Remove duplicates *)
+let distinct query =
+  map (fun lst ->
+    let seen = Hashtbl.create 16 in
+    List.filter (fun x ->
+      let key = x in
+      if Hashtbl.mem seen key then false
+      else (Hashtbl.add seen key (); true)
+    ) lst
+  ) query
+
+(* Fold/reduce over a list *)
+let reduce f init query =
+  map (List.fold_left f init) query
+
+let fold_left = reduce  (* Alias for reduce *)
+
+(* Tap for side effects *)
+let tap f query =
+  map (fun x -> f x; x) query

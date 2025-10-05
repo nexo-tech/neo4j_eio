@@ -17,7 +17,7 @@ let connect_flow ~sw ~net (cfg : Config.t) =
     tcp_flow
 
 (* TLS connection helper - separate function to handle TLS type *)
-let connect_tls ~sw ~net (cfg : Config.t) : Tls_eio.t =
+let _connect_tls ~sw ~net (cfg : Config.t) : Tls_eio.t =
   let (host, port) = get_host_port cfg in
   let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, port) in
   let tcp_flow = Net.connect ~sw net addr in

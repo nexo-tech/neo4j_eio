@@ -147,7 +147,7 @@ let test_dedup_sort_pipeline env cfg =
            CREATE (f:%s {name: fruit})
            RETURN f.name AS name" label)
         |> extract Extract.(text "name")
-        |> deduplicate_by (=)
+        |> deduplicate_by (fun x -> x)
         |> sort String.compare
         |> run_in session
       ) in

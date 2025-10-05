@@ -293,7 +293,7 @@ let _test_sequence_unit env cfg =
       ) in
 
       match result, verify with
-      | Ok (), Ok 3 -> Ok ()
+      | Ok (), Ok 3L -> Ok ()
       | _ -> Error (Error.Protocol "sequence_unit test failed")
     ) with
     | Ok () -> ()

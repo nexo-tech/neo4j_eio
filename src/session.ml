@@ -3,7 +3,7 @@ open Eio
 (* Session manages a single connection with serialized access *)
 type 'a t = {
   flow: 'a;
-  version: Protocol.version;
+  version: Protocol.version; [@warning "-69"]
   mutex: Mutex.t;
   mutable closed: bool;
   mutable in_transaction: bool;

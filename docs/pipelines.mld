@@ -1,0 +1,132 @@
+{0 Cypher Pipelines}
+
+The Cypher pipeline API provides a functional, composable way to build and transform queries. It allows you to chain transformations, apply filters, and extract typed data in a type-safe manner.
+
+{1 Overview}
+
+Cypher pipelines use the {!Neo4j_eio.Cypher} module to create fluent query transformations:
+
+{[
+open Neo4j_eio
+
+let example session =
+  Cypher.(
+    query "MATCH (p:Person) RETURN p.name AS name, p.age AS age"
+    |> extract Extract.(pair (text "name") (int "age"))
+    |> filter (fun (_, age) -> age > 25L)
+    |> map (List.map (fun (name, age) -> Printf.sprintf "%s (%Ld)" name age))
+    |> run session
+  )
+]}
+
+{1 Core Operations}
+
+{2 Query Construction}
+
+- {!Cypher.query} - Create a query from a Cypher string
+- {!Cypher.query_unit} - Create a query that returns unit (for mutations)
+- {!Cypher.with_params} - Add parameters to a query
+
+{2 Transformation}
+
+- {!Cypher.map} - Transform query results
+- {!Cypher.flat_map} - Transform and flatten results
+- {!Cypher.filter} - Filter results by predicate
+- {!Cypher.take} - Take first n results
+- {!Cypher.drop} - Drop first n results
+- {!Cypher.reverse} - Reverse result list
+
+{2 Aggregation}
+
+- {!Cypher.count} - Count results
+- {!Cypher.sum_int} - Sum integer values
+- {!Cypher.average_int} - Average of integer values
+- {!Cypher.group_by} - Group by key function
+- {!Cypher.distinct} - Remove duplicates
+- {!Cypher.deduplicate_by} - Remove duplicates by key
+
+{2 Searching}
+
+- {!Cypher.find} - Find first matching element
+- {!Cypher.exists} - Check if any element matches
+- {!Cypher.for_all} - Check if all elements match
+- {!Cypher.partition} - Split list by predicate
+
+{2 Utilities}
+
+- {!Cypher.indexed} - Add indices to elements
+- {!Cypher.chunk} - Split into chunks
+- {!Cypher.sliding_window} - Create sliding windows
+- {!Cypher.tap} - Execute side effects
+
+{1 Examples}
+
+{2 Data Transformation Pipeline}
+
+{[
+let process_users session =
+  Cypher.(
+    query "MATCH (u:User) RETURN u.name AS name, u.score AS score"
+    |> extract Extract.(pair (text "name") (int "score"))
+    |> filter (fun (_, score) -> score > 100L)
+    |> sort_by snd
+    |> take 10
+    |> map (List.map fst)
+    |> run session
+  )
+]}
+
+{2 Aggregation}
+
+{[
+let user_stats session =
+  Cypher.(
+    query "MATCH (u:User) RETURN u.age AS age"
+    |> extract Extract.(int "age")
+    |> map (fun ages ->
+        let count = List.length ages in
+        let sum = List.fold_left Int64.add 0L ages in
+        let avg = Int64.div sum (Int64.of_int count) in
+        (count, sum, avg)
+      )
+    |> run session
+  )
+]}
+
+{2 Batching}
+
+{[
+let process_in_batches session =
+  Cypher.(
+    query "MATCH (n:Node) RETURN n.id AS id"
+    |> extract Extract.(int "id")
+    |> chunk 100
+    |> map (List.map (fun batch ->
+        (* Process each batch *)
+        batch
+      ))
+    |> run session
+  )
+]}
+
+{1 Error Handling}
+
+{[
+let safe_pipeline session =
+  Cypher.(
+    query "MATCH (u:User) RETURN u.name AS name"
+    |> extract Extract.(text "name")
+    |> assert_non_empty
+    |> recover (fun err ->
+        (* Provide default on error *)
+        Ok ["default_user"]
+      )
+    |> run session
+  )
+]}
+
+{1 See Also}
+
+- {!Neo4j_eio.Cypher} - Full API reference
+- {!Neo4j_eio.Extract} - Type-safe extractors
+- {{!page-"extractors"}Extractors Guide}

@@ -1,0 +1,197 @@
+{0 neo4j_eio — OCaml Neo4j Driver (Eio)}
+
+neo4j_eio is a modern, effects-based Neo4j driver for OCaml 5+. It implements the Bolt protocol and uses Eio for safe, concurrent I/O. The library focuses on type safety, predictable errors, and approachable APIs for both simple queries and advanced graph workflows.
+
+{1 Features}
+
+- Eio-first design: safe concurrency, no blocking Unix calls in library code
+- Bolt protocol support: v5 (primary), v4, v3 negotiation
+- Strong typing: explicit [(result_type, Error.t) result] across the surface
+- Complete value coverage: all PackStream and Neo4j v2 temporal/spatial types
+- Transactions: explicit BEGIN/COMMIT/ROLLBACK and a Transaction DSL
+- Streaming: consume large result sets incrementally
+- Query Builder: fluent Cypher construction with parameters
+- Record decoding: ergonomic, typed accessors
+
+{1 Compatibility}
+
+- Neo4j 5.x: Bolt v5
+- Neo4j 4.x: Bolt v4
+- Neo4j 3.5+: Bolt v3
+
+{1 Installation}
+
+Add to your [dune-project]:
+
+{v
+(package
+ (name your_package)
+ (depends
+  neo4j_eio))
+v}
+
+Or install with opam:
+
+{v
+opam install neo4j_eio
+v}
+
+{1 Quick Start}
+
+{2 Hello, Neo4j}
+
+This example shows the basic usage pattern:
+
+{[
+open Neo4j_eio
+
+let () =
+  Eio_main.run @@ fun env ->
+    let cfg = Config.of_env () in
+    Eio.Switch.run @@ fun sw ->
+      match Session.with_session ~sw ~net:env#net cfg (fun session ->
+        (* Build and run a simple query *)
+        let open Transaction_dsl in
+        let tx =
+          let* rows = exec_query_builder
+            (Query_builder.raw "RETURN 1 AS num, 'hello' AS text") in
+          match rows with
+          | [r] ->
+              let num = Record.at_int r "num" in
+              let text = Record.at_text r "text" in
+              Printf.printf "num=%Ld, text=%s\n" num text;
+              return ()
+          | _ -> fail (Error.Protocol "Expected exactly one row")
+        in
+        Session.transact session tx
+      ) with
+      | Ok () -> Printf.printf "Success!\n"
+      | Error e -> Printf.eprintf "Error: %s\n" (Error.to_string e)
+]}
+
+{2 Configuration}
+
+Configure connection via environment variables:
+
+{v
+export NEO4J_URI="bolt://localhost:7687"
+export NEO4J_USER="neo4j"
+export NEO4J_PASSWORD="password"
+v}
+
+Or programmatically:
+
+{[
+let cfg = Config.{
+  uri = "bolt://localhost:7687";
+  user = "neo4j";
+  password = "password";
+  max_pool_size = 10;
+  connection_timeout = 30.0;
+  log_level = Info;
+}
+]}
+
+{1 Core Modules}
+
+{!modules:
+Neo4j_eio.Config
+Neo4j_eio.Session
+Neo4j_eio.Record
+Neo4j_eio.Value
+Neo4j_eio.Error
+Neo4j_eio.Query_builder
+Neo4j_eio.Transaction_dsl
+Neo4j_eio.Extract
+Neo4j_eio.Cypher
+}
+
+{1 Advanced Modules}
+
+{!modules:
+Neo4j_eio.Lens
+Neo4j_eio.Traversal
+Neo4j_eio.Result_ops
+Neo4j_eio.Protocol
+Neo4j_eio.Connection
+Neo4j_eio.Packstream
+}
+
+{1 Examples}
+
+{2 Simple Query}
+
+{[
+open Neo4j_eio
+
+let create_user session name age =
+  let open Query_builder in
+  let query =
+    raw "CREATE (u:User {name: $name, age: $age}) RETURN u"
+    |> with_params [
+        ("name", Value.Text name);
+        ("age", Value.Int (Int64.of_int age))
+       ]
+  in
+  execute query session
+]}
+
+{2 Using Cypher Pipeline}
+
+{[
+open Neo4j_eio
+
+let find_adult_users session =
+  let open Cypher in
+  query "MATCH (u:User) RETURN u.name AS name, u.age AS age"
+  |> extract Extract.(pair (text "name") (int "age"))
+  |> filter (fun (_, age) -> age >= 18L)
+  |> map (List.map fst)  (* Extract just names *)
+  |> run session
+]}
+
+{2 Transaction DSL}
+
+{[
+open Neo4j_eio
+
+let transfer_funds session from_id to_id amount =
+  let open Transaction_dsl in
+  let tx =
+    let* _ = exec_query_builder_unit
+      (Query_builder.raw "MATCH (a:Account {id: $id}) SET a.balance = a.balance - $amount"
+       |> Query_builder.with_params [
+           ("id", Value.Int from_id);
+           ("amount", Value.Float amount)
+          ])
+    in
+    let* _ = exec_query_builder_unit
+      (Query_builder.raw "MATCH (a:Account {id: $id}) SET a.balance = a.balance + $amount"
+       |> Query_builder.with_params [
+           ("id", Value.Int to_id);
+           ("amount", Value.Float amount)
+          ])
+    in
+    return ()
+  in
+  Session.transact session tx
+]}
+
+{1 API Documentation}
+
+- {!Neo4j_eio} - Main library module
+- {{!page-"pipelines"}Cypher Pipelines} - Transform and compose queries
+- {{!page-"extractors"}Data Extraction} - Type-safe record decoding
+- {{!page-"transactions"}Transactions} - ACID guarantees and DSL
+- {{!page-"streaming"}Streaming} - Handle large result sets
+- {{!page-"best-practices"}Best Practices} - Performance and patterns
+
+{1 Resources}
+
+- {{:https://github.com/yourusername/neo4j_eio}GitHub Repository}
+- {{:https://neo4j.com/docs/}Neo4j Documentation}
+- {{:https://github.com/ocaml-multicore/eio}Eio Documentation}
+
+{1 License}
+
+MIT License - see LICENSE file for details
