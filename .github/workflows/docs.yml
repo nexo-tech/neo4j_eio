@@ -36,9 +36,12 @@ jobs:
             -w /workspace \
             ocaml/opam:ubuntu-22.04-ocaml-5.2 \
             bash -c '
-              # Install dune, odoc, and project dependencies
+              # Install dune and odoc
               opam install dune odoc --yes
-              opam install eio cstruct angstrom tls-eio x509 ca-certs domain-name --yes
+              eval $(opam env)
+
+              # Install project dependencies from dune-project
+              opam install . --deps-only --with-doc --yes
               eval $(opam env)
 
               # Convert markdown files to mld (skip SUMMARY.md and README.md)
