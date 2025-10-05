@@ -6,10 +6,39 @@ type 'a t = {
   version: Protocol.version;
   mutex: Mutex.t;
   mutable closed: bool;
+  mutable in_transaction: bool;
 }
 
 let create flow version =
-  { flow; version; mutex = Mutex.create (); closed = false }
+  { flow; version; mutex = Mutex.create (); closed = false; in_transaction = false }
+
+(* Internal reset - must be called with mutex already held *)
+let reset_internal t =
+  let reset_msg = Protocol.build_reset () in
+  Connection.send_message t.flow reset_msg;
+
+  match Connection.recv_response t.flow with
+  | Error e -> Error (Error.Protocol ("RESET decode failed: " ^ e))
+  | Ok (Value.Struct { signature = 0x70; _ }) ->
+      t.in_transaction <- false;  (* RESET clears transaction state *)
+      Ok ()
+  | Ok (Value.Struct { signature = 0x7F; fields }) ->
+      let err = match fields with
+      | Value.Map m :: _ -> Error.from_failure_map m
+      | _ -> Error.Protocol "RESET failed"
+      in
+      Error err
+  | Ok _ ->
+      Error (Error.Protocol "Unexpected RESET response")
+
+(* Reset the session to clear failed state *)
+let reset t =
+  if t.closed then
+    Error (Error.Protocol "Session is closed")
+  else
+    Mutex.use_rw t.mutex ~protect:true (fun () ->
+      reset_internal t
+    )
 
 (* Stream type for lazy record consumption *)
 type stream = {
@@ -66,13 +95,16 @@ let run_stream t ~statement ?(parameters = Value.StringMap.empty) ?(fetch_size =
                         stream.exhausted <- true;
                         Ok (List.rev acc |> List.flatten)
                     | Ok (Value.Struct { signature = 0x7F; fields }) ->
-                        (* FAILURE *)
+                        (* FAILURE - automatically reset session *)
                         exhausted_ref := true;
                         stream.exhausted <- true;
                         let err = match fields with
                         | Value.Map m :: _ -> Error.from_failure_map m
                         | _ -> Error.Protocol "Query failed"
                         in
+                        (* Auto-reset like hasbolt does, but not in transactions *)
+                        (if not t.in_transaction then
+                          let _ = reset_internal t in ());
                         Error err
                     | Ok _ ->
                         exhausted_ref := true;
@@ -89,10 +121,14 @@ let run_stream t ~statement ?(parameters = Value.StringMap.empty) ?(fetch_size =
       | Ok (Value.Struct { signature = 0x7E; _ }) ->
           Error (Error.Protocol "RUN was ignored - session in failed state")
       | Ok (Value.Struct { signature = 0x7F; fields }) ->
+          (* FAILURE - automatically reset session *)
           let err = match fields with
           | Value.Map m :: _ -> Error.from_failure_map m
           | _ -> Error.Protocol "RUN failed"
           in
+          (* Auto-reset like hasbolt does, but not in transactions *)
+          (if not t.in_transaction then
+            let _ = reset_internal t in ());
           Error err
       | Ok _ ->
           Error (Error.Protocol "Unexpected RUN response")
@@ -151,11 +187,13 @@ let run t ~statement ?(parameters = Value.StringMap.empty) ?(fetch_size = -1L) (
                 (* SUCCESS without metadata - end of stream *)
                 Ok (List.rev acc |> List.flatten)
             | Ok (Value.Struct { signature = 0x7F; fields }) ->
-                (* FAILURE *)
+                (* FAILURE - automatically reset session *)
                 let err = match fields with
                 | Value.Map m :: _ -> Error.from_failure_map m
                 | _ -> Error.Protocol "Query failed"
                 in
+                (* Auto-reset like hasbolt does *)
+                let _ = reset_internal t in
                 Error err
             | Ok _ ->
                 Error (Error.Protocol "Unexpected response during PULL")
@@ -165,11 +203,14 @@ let run t ~statement ?(parameters = Value.StringMap.empty) ?(fetch_size = -1L) (
           (* IGNORED - query was ignored (session in failed state after previous error) *)
           Error (Error.Protocol "RUN was ignored - session in failed state")
       | Ok (Value.Struct { signature = 0x7F; fields }) ->
-          (* FAILURE *)
+          (* FAILURE - automatically reset session *)
           let err = match fields with
           | Value.Map m :: _ -> Error.from_failure_map m
           | _ -> Error.Protocol "RUN failed"
           in
+          (* Auto-reset like hasbolt does, but not in transactions *)
+          (if not t.in_transaction then
+            let _ = reset_internal t in ());
           Error err
       | Ok _ ->
           Error (Error.Protocol "Unexpected RUN response")
@@ -203,12 +244,15 @@ let begin_transaction t ?(metadata = Value.StringMap.empty) () =
       match Connection.recv_response t.flow with
       | Error e -> Error (Error.Protocol ("BEGIN decode failed: " ^ e))
       | Ok (Value.Struct { signature = 0x70; _ }) ->
+          t.in_transaction <- true;  (* Now in transaction *)
           Ok ()
       | Ok (Value.Struct { signature = 0x7F; fields }) ->
+          (* FAILURE - automatically reset session *)
           let err = match fields with
           | Value.Map m :: _ -> Error.from_failure_map m
           | _ -> Error.Protocol "BEGIN failed"
           in
+          let _ = reset_internal t in
           Error err
       | Ok _ ->
           Error (Error.Protocol "Unexpected BEGIN response")
@@ -226,12 +270,15 @@ let commit t =
       match Connection.recv_response t.flow with
       | Error e -> Error (Error.Protocol ("COMMIT decode failed: " ^ e))
       | Ok (Value.Struct { signature = 0x70; _ }) ->
+          t.in_transaction <- false;  (* Transaction ended *)
           Ok ()
       | Ok (Value.Struct { signature = 0x7F; fields }) ->
+          (* FAILURE - automatically reset session *)
           let err = match fields with
           | Value.Map m :: _ -> Error.from_failure_map m
           | _ -> Error.Protocol "COMMIT failed"
           in
+          let _ = reset_internal t in
           Error err
       | Ok _ ->
           Error (Error.Protocol "Unexpected COMMIT response")
@@ -250,41 +297,24 @@ let rollback t =
       | Error e -> Error (Error.Protocol ("ROLLBACK decode failed: " ^ e))
       | Ok (Value.Struct { signature = 0x70; _ }) ->
           (* SUCCESS - rollback completed *)
+          t.in_transaction <- false;  (* Transaction ended *)
           Ok ()
       | Ok (Value.Struct { signature = 0x7E; _ }) ->
           (* IGNORED - transaction was already failed, rollback implicit *)
+          (* But session is still in FAILED state, need RESET to clear it *)
+          t.in_transaction <- false;  (* Transaction ended *)
+          let _ = reset_internal t in
           Ok ()
       | Ok (Value.Struct { signature = 0x7F; fields }) ->
+          (* FAILURE - automatically reset session *)
           let err = match fields with
           | Value.Map m :: _ -> Error.from_failure_map m
           | _ -> Error.Protocol "ROLLBACK failed"
           in
+          let _ = reset_internal t in
           Error err
       | Ok _ ->
           Error (Error.Protocol "Unexpected ROLLBACK response")
-    )
-
-(* Reset the session to clear failed state *)
-let reset t =
-  if t.closed then
-    Error (Error.Protocol "Session is closed")
-  else
-    Mutex.use_rw t.mutex ~protect:true (fun () ->
-      let reset_msg = Protocol.build_reset () in
-      Connection.send_message t.flow reset_msg;
-
-      match Connection.recv_response t.flow with
-      | Error e -> Error (Error.Protocol ("RESET decode failed: " ^ e))
-      | Ok (Value.Struct { signature = 0x70; _ }) ->
-          Ok ()
-      | Ok (Value.Struct { signature = 0x7F; fields }) ->
-          let err = match fields with
-          | Value.Map m :: _ -> Error.from_failure_map m
-          | _ -> Error.Protocol "RESET failed"
-          in
-          Error err
-      | Ok _ ->
-          Error (Error.Protocol "Unexpected RESET response")
     )
 
 (* Transact helper: runs actions in a transaction, commits on success, rollback on error *)
@@ -298,15 +328,13 @@ let transact t f =
         match f t with
         | Error e ->
             (* Action failed - rollback and return error *)
+            (* Note: If the error was a FAILURE, automatic reset already happened *)
             (match rollback t with
              | Ok () ->
-                 (* Rollback succeeded or was ignored - might need reset to clear state *)
-                 (* Try reset to ensure session is back to READY state *)
-                 let _ = reset t in
+                 (* Rollback succeeded - session is back to READY state *)
                  Error e
              | Error _ ->
-                 (* Rollback failed - try reset and return original error *)
-                 let _ = reset t in
+                 (* Rollback failed - automatic reset already happened if it was a FAILURE *)
                  Error e)
         | Ok result ->
             (* Action succeeded - commit *)

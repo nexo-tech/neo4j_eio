@@ -24,9 +24,6 @@ let example_syntax_error session =
 let example_error_to_string session =
   Printf.printf "\nExample 2: Error.to_string usage\n";
 
-  (* First reset to clear any previous failed state *)
-  let _ = Session.reset session in
-
   match Neo4j.query session
     ~statement:"MATCH (n:NonExistent) WHERE n.invalid RETURN invalid.field"
     () with
@@ -35,9 +32,7 @@ let example_error_to_string session =
   | Error e ->
       Printf.printf "  ✓ Error caught and formatted:\n";
       Printf.printf "    %s\n" (Error.to_string e);
-      Printf.printf "  ✓ Error.to_string provides readable output\n";
-      (* Reset after error *)
-      let _ = Session.reset session in ()
+      Printf.printf "  ✓ Error.to_string provides readable output (auto-reset done)\n"
 
 (* Example 3: Pattern matching on all error types *)
 let example_error_pattern_matching session =
@@ -49,49 +44,40 @@ let example_error_pattern_matching session =
     | Ok _ ->
         Printf.printf "    Query succeeded\n"
     | Error (Error.ClientError { code; _ }) ->
-        Printf.printf "    ClientError: %s\n" code;
-        let _ = Session.reset session in ()
+        Printf.printf "    ClientError: %s (auto-reset)\n" code
     | Error (Error.Database { code; _ }) ->
-        Printf.printf "    DatabaseError: %s\n" code;
-        let _ = Session.reset session in ()
+        Printf.printf "    DatabaseError: %s (auto-reset)\n" code
     | Error (Error.Transient { code; _ }) ->
-        Printf.printf "    TransientError: %s\n" code;
-        let _ = Session.reset session in ()
+        Printf.printf "    TransientError: %s (auto-reset)\n" code
     | Error (Error.Protocol msg) ->
-        Printf.printf "    Protocol error: %s\n" (String.sub msg 0 (min 50 (String.length msg)));
-        let _ = Session.reset session in ()
+        Printf.printf "    Protocol error: %s (auto-reset)\n" (String.sub msg 0 (min 50 (String.length msg)))
     | Error (Error.Auth msg) ->
-        Printf.printf "    Auth error: %s\n" msg;
-        let _ = Session.reset session in ()
+        Printf.printf "    Auth error: %s (auto-reset)\n" msg
     | Error (Error.Io msg) ->
-        Printf.printf "    I/O error: %s\n" msg;
-        let _ = Session.reset session in ()
+        Printf.printf "    I/O error: %s (auto-reset)\n" msg
   in
 
   test_query "RETURN 1" "Valid query";
   test_query "SYNTAX ERROR" "Invalid syntax";
-  Printf.printf "  ✓ All error types can be matched\n"
+  Printf.printf "  ✓ All error types matched (session auto-resets)\n"
 
-(* Example 4: Recovery after error with reset *)
+(* Example 4: Automatic recovery after error *)
 let example_error_recovery session =
-  Printf.printf "\nExample 4: Recovery after error with reset\n";
+  Printf.printf "\nExample 4: Automatic recovery after error\n";
 
   (* First query fails *)
   (match Neo4j.query session ~statement:"INVALID SYNTAX" () with
    | Ok _ -> Printf.printf "  ✗ First query unexpectedly succeeded\n"
    | Error e ->
-       Printf.printf "  ✓ First query failed as expected: %s\n"
+       Printf.printf "  ✓ First query failed: %s\n"
          (String.sub (Error.to_string e) 0 (min 40 (String.length (Error.to_string e))));
-       (* Reset session to clear failed state *)
-       (match Session.reset session with
-        | Ok () -> Printf.printf "  ✓ Session reset successful\n"
-        | Error e -> Printf.printf "  ✗ Reset failed: %s\n" (Error.to_string e)));
+       Printf.printf "  ✓ Session automatically reset\n");
 
-  (* Second query should now work after reset *)
+  (* Second query should work immediately (auto-reset done) *)
   match Neo4j.query session ~statement:"RETURN 42 AS answer" () with
   | Ok [Value.Int n] ->
-      Printf.printf "  ✓ Recovered successfully, got: %Ld\n" n;
-      Printf.printf "  ✓ Session continues to work after reset\n"
+      Printf.printf "  ✓ Next query works immediately, got: %Ld\n" n;
+      Printf.printf "  ✓ No manual reset needed!\n"
   | Ok _ ->
       Printf.printf "  ✗ Unexpected result format\n"
   | Error e ->
@@ -186,20 +172,16 @@ let example_defensive_handling session =
         Printf.printf "  Got %d values (processing differently)\n" (List.length values);
         Ok ()
     | Error (Error.ClientError { code; message }) ->
-        Printf.printf "  Client error - user's fault: %s\n" code;
-        let _ = Session.reset session in
+        Printf.printf "  Client error - user's fault: %s (auto-reset)\n" code;
         Error message
     | Error (Error.Transient { code; _ }) ->
-        Printf.printf "  Transient error - could retry: %s\n" code;
-        let _ = Session.reset session in
+        Printf.printf "  Transient error - could retry: %s (auto-reset)\n" code;
         Error "Retry needed"
     | Error (Error.Database { code; _ }) ->
-        Printf.printf "  Database error - server issue: %s\n" code;
-        let _ = Session.reset session in
+        Printf.printf "  Database error - server issue: %s (auto-reset)\n" code;
         Error "Server error"
     | Error e ->
-        Printf.printf "  Other error: %s\n" (Error.to_string e);
-        let _ = Session.reset session in
+        Printf.printf "  Other error: %s (auto-reset)\n" (Error.to_string e);
         Error "Generic error"
   in
 
