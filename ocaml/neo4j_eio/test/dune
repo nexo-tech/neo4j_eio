@@ -188,3 +188,9 @@
  (modules pipeline_integration_test)
  (libraries neo4j_eio eio eio_main alcotest test_helper)
  (action (run %{exe:pipeline_integration_test.exe})))
+
+(test
+ (name lens_test)
+ (modules lens_test)
+ (libraries neo4j_eio eio eio_main alcotest test_helper)
+ (action (run %{exe:lens_test.exe})))
