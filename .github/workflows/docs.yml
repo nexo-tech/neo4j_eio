@@ -19,7 +19,6 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ocaml/opam:ubuntu-22.04-ocaml-5.2
-      options: --user root
 
     steps:
       - name: Checkout
@@ -30,10 +29,7 @@ jobs:
 
       - name: Convert markdown to mld and build docs
         run: |
-          apt-get update && apt-get install -y rsync pandoc
-
-          # Initialize opam for root user
-          opam init --disable-sandboxing --bare --yes
+          sudo apt-get update && sudo apt-get install -y rsync pandoc
           opam install dune odoc --yes
           eval $(opam env)
 
