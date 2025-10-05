@@ -40,8 +40,9 @@ jobs:
               opam install dune odoc --yes
               eval $(opam env)
 
-              # Install project dependencies from dune-project
-              opam install . --deps-only --with-doc --yes
+              # Pin and install project dependencies
+              opam pin add neo4j_eio . --no-action --yes
+              opam install neo4j_eio --deps-only --with-doc --yes
               eval $(opam env)
 
               # Convert markdown files to mld (skip SUMMARY.md and README.md)
