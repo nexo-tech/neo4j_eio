@@ -10,4 +10,4 @@ create-missing = true
 [output.html]
 git-repository-url = ""
 preferred-dark-theme = "ayu"
-additional-js = ["theme/ocaml.js"]
+additional-js = ["theme/ocaml.js", "theme/ocaml-init.js"]
