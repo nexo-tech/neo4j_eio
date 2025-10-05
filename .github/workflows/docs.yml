@@ -17,8 +17,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: ocaml/opam:ubuntu-22.04-ocaml-5.2
 
     steps:
       - name: Checkout
@@ -27,47 +25,53 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
-      - name: Convert markdown to mld and build docs
+      - name: Build documentation in Docker
         run: |
-          sudo apt-get update && sudo apt-get install -y rsync pandoc
-          opam install dune odoc --yes
-          eval $(opam env)
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace \
+            ocaml/opam:ubuntu-22.04-ocaml-5.2 \
+            bash -c '
+              sudo apt-get update && sudo apt-get install -y rsync pandoc
+              opam install dune odoc --yes
+              eval $(opam env)
 
-          # Convert markdown files to mld
-          echo "Converting markdown documentation..."
-          find docs/src -name "*.md" -type f | while read -r mdfile; do
-            relpath="${mdfile#docs/src/}"
-            mldfile="docs/pages/${relpath%.md}.mld"
-            mkdir -p "$(dirname "$mldfile")"
+              # Convert markdown files to mld
+              echo "Converting markdown documentation..."
+              find docs/src -name "*.md" -type f | while read -r mdfile; do
+                relpath="${mdfile#docs/src/}"
+                mldfile="docs/pages/${relpath%.md}.mld"
+                mkdir -p "$(dirname "$mldfile")"
 
-            # Convert markdown to odoc format
-            echo "{0 $(basename "$mdfile" .md)}" > "$mldfile"
-            echo "" >> "$mldfile"
-            cat "$mdfile" | sed -E \
-              -e 's/^# (.+)/{1 \1}/' \
-              -e 's/^## (.+)/{2 \1}/' \
-              -e 's/^### (.+)/{3 \1}/' \
-              >> "$mldfile"
-          done
+                # Convert markdown to odoc format
+                echo "{0 $(basename "$mdfile" .md)}" > "$mldfile"
+                echo "" >> "$mldfile"
+                cat "$mdfile" | sed -E \
+                  -e "s/^# (.+)/{1 \1}/" \
+                  -e "s/^## (.+)/{2 \1}/" \
+                  -e "s/^### (.+)/{3 \1}/" \
+                  >> "$mldfile"
+              done
 
-          # Update docs/dune to include all mld files
-          echo "(documentation" > docs/dune
-          echo " (package neo4j_eio)" >> docs/dune
-          echo " (mld_files" >> docs/dune
-          echo "  index pipelines extractors transactions streaming best-practices" >> docs/dune
-          find docs/pages -name "*.mld" -type f | while read f; do
-            name=$(basename "$f" .mld)
-            reldir=$(dirname "${f#docs/pages/}")
-            if [ "$reldir" = "." ]; then
-              echo "  pages/$name" >> docs/dune
-            else
-              echo "  pages/$reldir/$name" >> docs/dune
-            fi
-          done
-          echo " ))" >> docs/dune
+              # Update docs/dune to include all mld files
+              echo "(documentation" > docs/dune
+              echo " (package neo4j_eio)" >> docs/dune
+              echo " (mld_files" >> docs/dune
+              echo "  index pipelines extractors transactions streaming best-practices" >> docs/dune
+              find docs/pages -name "*.mld" -type f | while read f; do
+                name=$(basename "$f" .mld)
+                reldir=$(dirname "${f#docs/pages/}")
+                if [ "$reldir" = "." ]; then
+                  echo "  pages/$name" >> docs/dune
+                else
+                  echo "  pages/$reldir/$name" >> docs/dune
+                fi
+              done
+              echo " ))" >> docs/dune
 
-          # Build documentation
-          dune build @doc
+              # Build documentation
+              dune build @doc
+            '
 
       - name: Prepare docs for upload
         run: |
