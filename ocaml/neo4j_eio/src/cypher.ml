@@ -187,3 +187,254 @@ let (>>=) = bind
 let (>>|) q f = map f q
 
 let (|>) q f = f q
+
+(* Parameter construction helpers *)
+
+let props params = params
+
+let text value = Value.Text value
+let int value = Value.Int value
+let float value = Value.Float value
+let bool value = Value.Bool value
+let null = Value.Null
+
+let list values = Value.List values
+let value_map values =
+  let m = List.fold_left (fun acc (k, v) ->
+    Value.StringMap.add k v acc
+  ) Value.StringMap.empty values in
+  Value.Map m
+
+(* Query sequencing *)
+
+let sequence queries =
+  let rec seq_all acc = function
+    | [] -> map (fun xs -> List.rev xs) (Base {
+        statement = "";
+        parameters = [];
+        transform = (fun _ -> Ok [])
+      })
+    | q :: qs ->
+        bind q (fun x ->
+          bind (seq_all (x :: acc) qs) (fun xs ->
+            Base {
+              statement = "";
+              parameters = [];
+              transform = (fun _ -> Ok xs)
+            }
+          )
+        )
+  in
+  seq_all [] queries
+
+let sequence_unit queries =
+  let rec seq_all = function
+    | [] -> query_unit ""
+    | q :: qs ->
+        bind q (fun _ -> seq_all qs)
+  in
+  seq_all queries
+
+(* Collection operations on query results *)
+
+let concat_map f query =
+  map (fun xs ->
+    List.concat_map f xs
+  ) query
+
+let fold_left f init query =
+  map (fun xs ->
+    List.fold_left f init xs
+  ) query
+
+let fold_right f query init =
+  map (fun xs ->
+    List.fold_right f xs init
+  ) query
+
+let for_each f query =
+  map (fun xs ->
+    List.iter f xs;
+    xs
+  ) query
+
+let partition pred query =
+  map (fun xs ->
+    List.partition pred xs
+  ) query
+
+let group_by key_fn query =
+  map (fun xs ->
+    let tbl = Hashtbl.create 16 in
+    List.iter (fun x ->
+      let k = key_fn x in
+      let existing = try Hashtbl.find tbl k with Not_found -> [] in
+      Hashtbl.replace tbl k (x :: existing)
+    ) xs;
+    Hashtbl.fold (fun k v acc -> (k, List.rev v) :: acc) tbl []
+  ) query
+
+let distinct query =
+  map (fun xs ->
+    let tbl = Hashtbl.create 16 in
+    List.filter (fun x ->
+      if Hashtbl.mem tbl x then false
+      else (Hashtbl.add tbl x (); true)
+    ) xs
+  ) query
+
+(* Error recovery *)
+
+let or_else query default =
+  let transform_fn = function
+    | Ok x -> Ok x
+    | Error _ -> Ok default
+  in
+  Transformed (query, transform_fn)
+
+let catch handler query =
+  let transform_fn = function
+    | Ok x -> Ok x
+    | Error e -> handler e
+  in
+  Transformed (query, transform_fn)
+
+let recover f query =
+  let transform_fn = function
+    | Ok x -> Ok x
+    | Error e -> f e
+  in
+  Transformed (query, transform_fn)
+
+(* Conditional execution *)
+
+let when_ok pred f query =
+  bind query (fun x ->
+    if pred x then f x
+    else Base {
+      statement = "";
+      parameters = [];
+      transform = (fun _ -> Ok x)
+    }
+  )
+
+let unless_ok pred f query =
+  when_ok (fun x -> not (pred x)) f query
+
+(* Query assertion helpers *)
+
+let assert_non_empty query =
+  let transform_fn = function
+    | Error e -> Error e
+    | Ok [] -> Error (Error.ClientError {
+        code = "Client.EmptyResult";
+        message = "Expected non-empty result"
+      })
+    | Ok xs -> Ok xs
+  in
+  Transformed (query, transform_fn)
+
+let assert_count n query =
+  let transform_fn = function
+    | Error e -> Error e
+    | Ok xs when List.length xs = n -> Ok xs
+    | Ok xs -> Error (Error.ClientError {
+        code = "Client.UnexpectedCount";
+        message = Printf.sprintf "Expected %d results, got %d" n (List.length xs)
+      })
+  in
+  Transformed (query, transform_fn)
+
+let assert_at_least n query =
+  let transform_fn = function
+    | Error e -> Error e
+    | Ok xs when List.length xs >= n -> Ok xs
+    | Ok xs -> Error (Error.ClientError {
+        code = "Client.InsufficientResults";
+        message = Printf.sprintf "Expected at least %d results, got %d" n (List.length xs)
+      })
+  in
+  Transformed (query, transform_fn)
+
+let assert_at_most n query =
+  let transform_fn = function
+    | Error e -> Error e
+    | Ok xs when List.length xs <= n -> Ok xs
+    | Ok xs -> Error (Error.ClientError {
+        code = "Client.TooManyResults";
+        message = Printf.sprintf "Expected at most %d results, got %d" n (List.length xs)
+      })
+  in
+  Transformed (query, transform_fn)
+
+(* Execution with retries - NOTE: disabled as it requires access to Eio clock which isn't available in this API level *)
+(* Users should implement retry logic at the application level where they have access to Eio.Time *)
+
+(* Timing utilities *)
+
+let with_timing query =
+  bind query (fun result ->
+    Base {
+      statement = "";
+      parameters = [];
+      transform = (fun _ -> Ok (result, 0.0))
+    }
+  )
+
+(* Tap for side effects *)
+
+let tap f query =
+  map (fun x ->
+    f x;
+    x
+  ) query
+
+(* Zip operations *)
+
+let zip q1 q2 =
+  bind q1 (fun xs ->
+    map (fun ys -> List.combine xs ys) q2
+  )
+
+let zip_with f q1 q2 =
+  bind q1 (fun xs ->
+    map (fun ys -> List.map2 f xs ys) q2
+  )
+
+(* Optional extraction helper that returns None on error *)
+
+let try_extract extractor query =
+  let transform_fn = function
+    | Error _ -> Ok []
+    | Ok records ->
+        List.filter_map (fun record ->
+          match Extract.run extractor record with
+          | Ok value -> Some value
+          | Error _ -> None
+        ) records
+        |> Result.ok
+  in
+  Transformed (query, transform_fn)
+
+(* Count helper *)
+
+let count query =
+  map List.length query
+
+(* Exists helper *)
+
+let exists pred query =
+  map (fun xs -> List.exists pred xs) query
+
+(* All helper *)
+
+let for_all pred query =
+  map (fun xs -> List.for_all pred xs) query
+
+(* Find helpers *)
+
+let find pred query =
+  map (fun xs -> List.find_opt pred xs) query
+
+let find_map f query =
+  map (fun xs -> List.find_map f xs) query

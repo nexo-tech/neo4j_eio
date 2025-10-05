@@ -158,3 +158,9 @@
  (modules cypher_test)
  (libraries neo4j_eio eio eio_main alcotest test_helper)
  (action (run %{exe:cypher_test.exe})))
+
+(test
+ (name cypher_composition_test)
+ (modules cypher_composition_test)
+ (libraries neo4j_eio eio eio_main alcotest test_helper)
+ (action (run %{exe:cypher_composition_test.exe})))
