@@ -62,3 +62,8 @@
  (name pipeline_showcase)
  (modules pipeline_showcase)
  (libraries neo4j_eio eio eio_main))
+
+(executable
+ (name lens_composition)
+ (modules lens_composition)
+ (libraries neo4j_eio eio eio_main))
