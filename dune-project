@@ -15,12 +15,15 @@
  (description "A modern, effects-based Neo4j driver for OCaml 5+ implementing the Bolt protocol with Eio for safe concurrent I/O")
  (depends
   (ocaml (>= 5.0))
-  dune
+  (dune (>= 3.13))
   eio
   cstruct
   angstrom
   tls-eio
   x509
   ca-certs
-  domain-name)
+  domain-name
+  (alcotest :with-test)
+  (eio_main :with-test)
+  (odoc :with-doc))
  (tags (database neo4j graph bolt eio)))
