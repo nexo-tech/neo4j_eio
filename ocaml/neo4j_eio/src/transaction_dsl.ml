@@ -1,45 +1,43 @@
 (** Transaction DSL implementation *)
 
-(** The transaction monad represents a computation that runs within a transaction context.
-    We use Obj.magic internally to work around the polymorphic flow type in Session.t.
-    This is safe because we never expose the session outside of the transaction. *)
-type 'a t = Tx of ((Obj.t -> ('a, Error.t) result))
+(** The transaction monad works with Neo4j sessions over network streams.
 
-(* Helper to create a transaction from a function *)
-let make_tx f = Tx (fun session -> f (Obj.magic session))
-
-(* Helper to run a transaction action *)
-let run_action (Tx f) session = f (Obj.obj session)
+    We use Eio.Net.stream_socket_ty which provides all the capabilities needed.
+    This is fully type-safe - no Obj.magic needed.
+*)
+type 'a t = Tx of (([ `Generic | `Unix ] Eio.Net.stream_socket_ty Eio.Resource.t) Session.t -> ('a, Error.t) result)
 
 (** {1 Core Operations} *)
 
-let return x = make_tx (fun _session -> Ok x)
+let return x = Tx (fun _session -> Ok x)
 
-let fail error = make_tx (fun _session -> Error error)
+let fail error = Tx (fun _session -> Error error)
 
 (** {1 Monadic Composition} *)
 
-let bind m f = make_tx (fun session ->
-  match run_action m session with
+let bind (Tx m) f = Tx (fun session ->
+  match m session with
   | Error e -> Error e
-  | Ok x -> run_action (f x) session
+  | Ok x ->
+      let (Tx g) = f x in
+      g session
 )
 
 let (let*) = bind
 
-let map f m = make_tx (fun session ->
-  match run_action m session with
+let map f (Tx m) = Tx (fun session ->
+  match m session with
   | Error e -> Error e
   | Ok x -> Ok (f x)
 )
 
 let (let+) m f = map f m
 
-let product m1 m2 = make_tx (fun session ->
-  match run_action m1 session with
+let product (Tx m1) (Tx m2) = Tx (fun session ->
+  match m1 session with
   | Error e -> Error e
   | Ok x ->
-      match run_action m2 session with
+      match m2 session with
       | Error e -> Error e
       | Ok y -> Ok (x, y)
 )
@@ -48,25 +46,25 @@ let (and+) = product
 
 (** {1 Query Execution} *)
 
-let exec_cypher query = make_tx (fun session ->
+let exec_cypher query = Tx (fun session ->
   Cypher.run query session
 )
 
-let exec_query_builder builder = make_tx (fun session ->
+let exec_query_builder builder = Tx (fun session ->
   Query_builder.execute builder session
 )
 
-let exec_query_builder_unit builder = make_tx (fun session ->
+let exec_query_builder_unit builder = Tx (fun session ->
   Query_builder.execute_unit builder session
 )
 
 (** {1 Transaction Control} *)
 
-let commit = make_tx (fun session ->
+let commit = Tx (fun session ->
   Session.commit session
 )
 
-let rollback = make_tx (fun session ->
+let rollback = Tx (fun session ->
   Session.rollback session
 )
 
@@ -104,27 +102,31 @@ let rec map f = function
 
 (** {1 Error Handling} *)
 
-let catch action handler = make_tx (fun session ->
-  match run_action action session with
+let catch (Tx action) handler = Tx (fun session ->
+  match action session with
   | Ok x -> Ok x
-  | Error e -> run_action (handler e) session
+  | Error e ->
+      let (Tx h) = handler e in
+      h session
 )
 
-let try_with action ~on_error = make_tx (fun session ->
-  match run_action action session with
+let try_with (Tx action) ~on_error = Tx (fun session ->
+  match action session with
   | Ok x -> Ok x
-  | Error _ -> run_action on_error session
+  | Error _ ->
+      let (Tx on_err) = on_error in
+      on_err session
 )
 
 (** {1 Execution} *)
 
-let run tx session =
+let run (Tx tx) session =
   (* Start transaction *)
   match Session.begin_transaction session () with
   | Error e -> Error e
   | Ok () ->
       (* Run the transaction actions *)
-      match run_action tx (Obj.repr session) with
+      match tx session with
       | Error e ->
           (* Action failed - rollback *)
           (match Session.rollback session with
@@ -145,7 +147,7 @@ let run_exn tx session =
 
 (** {1 Utility Functions} *)
 
-let get_session = make_tx (fun session -> Ok session)
+let get_session = Tx (fun session -> Ok session)
 
 let lift_result = function
   | Ok x -> return x

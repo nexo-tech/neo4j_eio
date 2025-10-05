@@ -1,20 +1,7 @@
 (** Transaction DSL for composable transaction workflows.
 
     This module provides a monadic DSL for building transaction workflows
-    that can be composed and executed atomically. It wraps the low-level
-    Session transaction primitives (begin_transaction, commit, rollback)
-    in a higher-level, composable interface.
-
-    {[
-      open Transaction_dsl
-
-      let transfer from_id to_id amount =
-        let* () = exec_query (debit_account from_id amount) in
-        let* () = exec_query (credit_account to_id amount) in
-        commit
-
-      let result = run transfer session
-    ]}
+    that can be composed and executed atomically.
 *)
 
 (** The transaction monad type. A value of type ['a t] represents a
@@ -105,16 +92,16 @@ val try_with : 'a t -> on_error:'a t -> 'a t
 
     Returns the result of the transaction or an error.
 *)
-val run : 'a t -> ([> `Flow | `R | `W ] Eio.Resource.t) Session.t -> ('a, Error.t) result
+val run : 'a t -> ([ `Generic | `Unix ] Eio.Net.stream_socket_ty Eio.Resource.t) Session.t -> ('a, Error.t) result
 
 (** [run_exn transaction session] executes a transaction, raising an exception on failure. *)
-val run_exn : 'a t -> ([> `Flow | `R | `W ] Eio.Resource.t) Session.t -> 'a
+val run_exn : 'a t -> ([ `Generic | `Unix ] Eio.Net.stream_socket_ty Eio.Resource.t) Session.t -> 'a
 
 (** {1 Utility Functions} *)
 
 (** [get_session] provides access to the session within a transaction context.
     This is an escape hatch for advanced use cases. *)
-val get_session : ([> `Flow | `R | `W ] Eio.Resource.t) Session.t t
+val get_session : ([ `Generic | `Unix ] Eio.Net.stream_socket_ty Eio.Resource.t) Session.t t
 
 (** [lift_result result] lifts a Result into the transaction monad. *)
 val lift_result : ('a, Error.t) result -> 'a t
