@@ -134,3 +134,9 @@
  (modules result_ops_test)
  (libraries neo4j_eio)
  (action (run %{exe:result_ops_test.exe})))
+
+(test
+ (name extract_test)
+ (modules extract_test)
+ (libraries neo4j_eio)
+ (action (run %{exe:extract_test.exe})))
