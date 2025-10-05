@@ -27,3 +27,8 @@
  (name temporal_spatial)
  (modules temporal_spatial)
  (libraries neo4j_eio eio eio_main))
+
+(executable
+ (name crud)
+ (modules crud)
+ (libraries neo4j_eio eio eio_main))
