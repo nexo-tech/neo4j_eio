@@ -16,8 +16,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,91 +24,25 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
-      - name: Build documentation in Docker
-        run: |
-          # Create pages directory and fix permissions for Docker
-          mkdir -p docs/pages
-          sudo chown -R 1000:1000 ${{ github.workspace }}
+      - name: Setup OCaml
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: 5.2.x
+          dune-cache: true
 
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace \
-            ocaml/opam:ubuntu-22.04-ocaml-5.2 \
-            bash -c '
-              set -e  # Exit on error
+      - name: Pin package
+        run: opam pin add neo4j_eio . --no-action --yes
 
-              echo "Installing system dependencies..."
-              sudo apt-get update -qq
-              sudo apt-get install -y pkg-config libgmp-dev
+      - name: Install dependencies
+        run: opam install . --deps-only --with-doc --yes
 
-              echo "Installing OCaml packages..."
-              opam install dune odoc eio eio_main cstruct angstrom tls-eio x509 ca-certs domain-name alcotest --yes
-
-              echo "Setting up opam environment..."
-              eval $(opam env)
-
-              echo "Checking dune version..."
-              dune --version
-
-              # Convert markdown files to mld (skip SUMMARY.md and README.md)
-              # Use flat naming: docs/src/advanced/tx-dsl.md -> docs/pages-advanced-tx-dsl.mld
-              echo "Converting markdown documentation..."
-              find docs/src -name "*.md" -type f | while read -r mdfile; do
-                # Skip SUMMARY.md and README.md files
-                basename=$(basename "$mdfile")
-                if [ "$basename" = "SUMMARY.md" ] || [ "$basename" = "README.md" ]; then
-                  echo "Skipping: $mdfile"
-                  continue
-                fi
-
-                # Convert path to flat name with hyphens
-                relpath="${mdfile#docs/src/}"
-                flatname=$(echo "${relpath%.md}" | tr "/" "-")
-                mldfile="docs/pages-${flatname}.mld"
-
-                echo "Converting: $mdfile -> $mldfile"
-
-                # Convert markdown to odoc format (wrap content in verbatim to preserve syntax)
-                echo "{0 $(basename "$mdfile" .md)}" > "$mldfile"
-                echo "" >> "$mldfile"
-                echo "{v" >> "$mldfile"
-                cat "$mdfile" >> "$mldfile"
-                echo "v}" >> "$mldfile"
-              done
-
-              # Update docs/dune to include all mld files
-              echo "Generating docs/dune..."
-              {
-                echo "(documentation"
-                echo " (package neo4j_eio)"
-                echo " (mld_files"
-                echo "  index pipelines extractors transactions streaming best-practices"
-                find docs -name "pages-*.mld" -type f | sort | while read f; do
-                  pagename=$(basename "$f" .mld)
-                  echo "  $pagename"
-                done
-                echo " ))"
-              } > docs/dune
-
-              echo "Generated docs/dune:"
-              cat docs/dune
-
-              echo "Listing all .mld files:"
-              find docs -name "*.mld" -type f | sort
-
-              # Build documentation
-              dune build @doc
-            '
+      - name: Build documentation
+        run: opam exec -- dune build @doc
 
       - name: Prepare docs for upload
         run: |
           mkdir -p _site
           cp -r _build/default/_doc/_html/* _site/
-
-          # Also copy original markdown for reference
-          mkdir -p _site/markdown
-          cp -r docs/src/* _site/markdown/
-
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
