@@ -2,6 +2,45 @@
 
 This document outlines a comprehensive plan for improving the neo4j_eio API to be more elegant, composable, and ergonomic while maintaining type safety and performance.
 
+## Master Checklist
+
+### Phase 1 — Result Monad Utilities (Foundation)
+- [ ] Task 1.1: Result monad combinators and operators (~200 lines)
+- [ ] Task 1.2: Let-syntax bindings for Result (~150 lines)
+- [ ] Task 1.3: Result-based query helpers (~200 lines)
+
+### Phase 2 — Applicative Extractors
+- [ ] Task 2.1: Extract monad with applicative operations (~250 lines)
+- [ ] Task 2.2: Field extractors (text, int, bool, etc.) (~200 lines)
+- [ ] Task 2.3: Composite extractors and examples (~150 lines)
+
+### Phase 3 — Query Builder
+- [ ] Task 3.1: Query builder with fluent API (~250 lines)
+- [ ] Task 3.2: Parameter binding and composition (~200 lines)
+- [ ] Task 3.3: Query execution and examples (~200 lines)
+
+### Phase 4 — Pipeline Operators
+- [ ] Task 4.1: Pipeline module with operators (~250 lines)
+- [ ] Task 4.2: Query transformation pipeline (~200 lines)
+- [ ] Task 4.3: Pipeline examples and tests (~150 lines)
+
+### Phase 5 — Lens-Based Access (Advanced)
+- [ ] Task 5.1: Basic lens implementation (~250 lines)
+- [ ] Task 5.2: Record and value lenses (~200 lines)
+- [ ] Task 5.3: Lens composition and examples (~150 lines)
+
+### Phase 6 — High-Level DSL
+- [ ] Task 6.1: Declarative query DSL (~250 lines)
+- [ ] Task 6.2: Transaction DSL (~200 lines)
+- [ ] Task 6.3: DSL examples and patterns (~150 lines)
+
+### Phase 7 — Integration & Documentation
+- [ ] Task 7.1: Update existing examples with new API (~300 lines)
+- [ ] Task 7.2: Migration guide and cookbook (~200 lines)
+- [ ] Task 7.3: Performance benchmarks and optimization
+
+---
+
 ## Current Pain Points
 
 ### 1. Nested Pattern Matching Hell
