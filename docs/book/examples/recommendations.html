@@ -1,0 +1,378 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Recommendations - neo4j_eio User Guide</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="User documentation for the OCaml Eio-based Neo4j driver">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "light";
+            const default_dark_theme = "ayu";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">neo4j_eio User Guide</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="recommendation-engine-example"><a class="header" href="#recommendation-engine-example">Recommendation Engine Example</a></h1>
+<p>This example shows practical recommendation patterns using the current API. We’ll model users purchasing items and generate recommendations using popularity and simple collaborative filtering.</p>
+<p>Data model</p>
+<ul>
+<li>Nodes: <code>(:User {username, name})</code>, <code>(:Item {sku, title, tags})</code></li>
+<li>Relationships: <code>(:User)-[:PURCHASED]-&gt;(:Item)</code></li>
+</ul>
+<p>APIs used</p>
+<ul>
+<li>Query Builder: <code>Query_builder.raw</code>, <code>with_params</code>, <code>execute</code>, <code>execute_unit</code></li>
+<li>Record decoding: <code>Record.at_text</code>, <code>Record.at_int</code>, <code>Record.at_list Record.exact_text</code></li>
+<li>Optional pipeline post‑processing via <code>Cypher</code> (map/sort)</li>
+</ul>
+<p>Bootstrap sample data</p>
+<pre><code class="language-ocaml">open Neo4j_eio
+
+let bootstrap_data session label =
+  (* Create items with tags *)
+  let _ = Query_builder.execute_unit
+    (Query_builder.raw (Printf.sprintf
+       "UNWIND [\n         {sku:'A', title:'Laptop', tags:['electronics','work']},\n         {sku:'B', title:'Mouse', tags:['electronics','accessory']},\n         {sku:'C', title:'Keyboard', tags:['electronics','accessory']},\n         {sku:'D', title:'Headphones', tags:['audio','accessory']},\n         {sku:'E', title:'Desk Lamp', tags:['home','light']}\n       ] AS x\n       MERGE (:Item:%s {sku: x.sku, title: x.title, tags: x.tags})"
+       label)) session in
+  (* Create users *)
+  let _ = Query_builder.execute_unit
+    (Query_builder.raw (Printf.sprintf
+       "UNWIND [\n         {u:'alice', n:'Alice'},\n         {u:'bob', n:'Bob'},\n         {u:'carol', n:'Carol'},\n         {u:'dave', n:'Dave'}\n       ] AS x\n       MERGE (:User:%s {username: x.u, name: x.n})"
+       label)) session in
+  (* Purchases *)
+  let mk u s =
+    Query_builder.raw (Printf.sprintf
+      "MATCH (u:User:%s {username:$u}),(i:Item:%s {sku:$s}) MERGE (u)-[:PURCHASED]-&gt;(i)"
+      label label)
+    |&gt; Query_builder.with_params [("u", Value.Text u); ("s", Value.Text s)]
+  in
+  let _ = Query_builder.execute_unit (mk "alice" "A") session in
+  let _ = Query_builder.execute_unit (mk "alice" "B") session in
+  let _ = Query_builder.execute_unit (mk "bob"   "B") session in
+  let _ = Query_builder.execute_unit (mk "bob"   "C") session in
+  let _ = Query_builder.execute_unit (mk "carol" "A") session in
+  let _ = Query_builder.execute_unit (mk "carol" "D") session in
+  let _ = Query_builder.execute_unit (mk "dave"  "C") session in
+  let _ = Query_builder.execute_unit (mk "dave"  "E") session in
+  Ok ()
+</code></pre>
+<p>Popularity‑based recommendations (items the user doesn’t own)</p>
+<pre><code class="language-ocaml">let recommend_popular session label ~for_user ~limit =
+  Query_builder.execute
+    (Query_builder.raw (Printf.sprintf
+       "MATCH (me:User:%s {username:$u})\n\
+        MATCH (other:User:%s)-[:PURCHASED]-&gt;(i:Item:%s)\n\
+        WHERE other &lt;&gt; me AND NOT (me)-[:PURCHASED]-&gt;(i)\n\
+        RETURN i.sku AS sku, i.title AS title, count(*) AS score\n\
+        ORDER BY score DESC, title ASC\n\
+        LIMIT $k"
+       label label label)
+     |&gt; Query_builder.with_params [
+          ("u", Value.Text for_user);
+          ("k", Value.Int (Int64.of_int limit));
+        ])
+    session
+</code></pre>
+<p>Collaborative filtering (users with shared purchases)</p>
+<pre><code class="language-ocaml">let recommend_similar_users session label ~for_user ~limit =
+  Query_builder.execute
+    (Query_builder.raw (Printf.sprintf
+       "MATCH (me:User:%s {username:$u})-[:PURCHASED]-&gt;(p:Item:%s)&lt;-[:PURCHASED]-(other:User:%s)\n\
+        WITH me, other, count(DISTINCT p) AS overlap\n\
+        MATCH (other)-[:PURCHASED]-&gt;(rec:Item:%s)\n\
+        WHERE NOT (me)-[:PURCHASED]-&gt;(rec)\n\
+        RETURN rec.sku AS sku, rec.title AS title, sum(overlap) AS score\n\
+        ORDER BY score DESC, title ASC\n\
+        LIMIT $k"
+       label label label label)
+     |&gt; Query_builder.with_params [
+          ("u", Value.Text for_user);
+          ("k", Value.Int (Int64.of_int limit));
+        ])
+    session
+</code></pre>
+<p>Content‑based (shared tags)</p>
+<pre><code class="language-ocaml">let recommend_by_tags session label ~for_user ~limit =
+  Query_builder.execute
+    (Query_builder.raw (Printf.sprintf
+       "MATCH (me:User:%s {username:$u})-[:PURCHASED]-&gt;(p:Item:%s)\n\
+        MATCH (rec:Item:%s)\n\
+        WHERE NOT (me)-[:PURCHASED]-&gt;(rec) AND any(t IN p.tags WHERE t IN rec.tags)\n\
+        RETURN rec.sku AS sku, rec.title AS title, size([t IN p.tags WHERE t IN rec.tags]) AS score\n\
+        ORDER BY score DESC, title ASC\n\
+        LIMIT $k"
+       label label label)
+     |&gt; Query_builder.with_params [
+          ("u", Value.Text for_user);
+          ("k", Value.Int (Int64.of_int limit));
+        ])
+    session
+</code></pre>
+<p>Putting it together</p>
+<pre><code class="language-ocaml">let () =
+  Eio_main.run @@ fun env -&gt;
+    let cfg = Config.of_env () in
+    Eio.Switch.run @@ fun sw -&gt;
+      match Session.with_session ~sw ~net:env#net cfg (fun session -&gt;
+        let label = Printf.sprintf "REC_%d" (Random.int 1_000_000) in
+        let _ = bootstrap_data session label in
+
+        let show title rows =
+          Printf.printf "%s\n" title;
+          List.iter (fun r -&gt;
+            match Record.at_text r "sku", Record.at_text r "title", Record.at_int r "score" with
+            | Ok sku, Ok title, Ok score -&gt;
+                Printf.printf "  %s — %s (score %Ld)\n" sku title score
+            | _ -&gt; ()
+          ) rows in
+
+        (* Popular items for Alice *)
+        (match recommend_popular session label ~for_user:"alice" ~limit:5 with
+         | Ok rows -&gt; show "Popular for @alice:" rows
+         | Error e -&gt; Printf.eprintf "Popular failed: %s\n" (Error.to_string e));
+
+        (* Similar users’ purchases for Alice *)
+        (match recommend_similar_users session label ~for_user:"alice" ~limit:5 with
+         | Ok rows -&gt; show "Similar users -&gt; @alice recommendations:" rows
+         | Error e -&gt; Printf.eprintf "Similar failed: %s\n" (Error.to_string e));
+
+        (* Content-based tag similarity for Alice *)
+        (match recommend_by_tags session label ~for_user:"alice" ~limit:5 with
+         | Ok rows -&gt; show "Tag overlap -&gt; @alice recommendations:" rows
+         | Error e -&gt; Printf.eprintf "Tags failed: %s\n" (Error.to_string e));
+
+        (* Cleanup *)
+        let _ = Query_builder.execute_unit
+          (Query_builder.raw (Printf.sprintf "MATCH (n:%s) DETACH DELETE n" label))
+          session in
+        Ok ()
+      ) with
+      | Ok () -&gt; ()
+      | Error e -&gt; Printf.eprintf "Session error: %s\n" (Error.to_string e)
+</code></pre>
+<p>Decoding</p>
+<ul>
+<li>Fields returned are aliased (<code>sku</code>, <code>title</code>, <code>score</code>) and decoded with <code>Record.at_text</code>/<code>Record.at_int</code>.</li>
+</ul>
+<p>Tips</p>
+<ul>
+<li>Keep examples label‑scoped for isolation and cleanup.</li>
+<li>Tune scoring and WHERE clauses for your domain; the examples use simple overlap‑based scoring.</li>
+<li>For larger datasets, consider using streaming APIs and post‑processing with <code>Cypher</code> transformations.</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../examples/social-network.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../examples/etl-pipeline.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../examples/social-network.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../examples/etl-pipeline.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

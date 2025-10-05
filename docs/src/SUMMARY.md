@@ -2,56 +2,56 @@
 
 - [Introduction](introduction.md)
 - [Installation](installation.md)
- - [Quick Start](quickstart.md)
+  - [Quick Start](quickstart.md)
 - [Configuration](configuration.md)
- 
-- Pipelines
+
+- [Pipelines](pipelines/README.md)
   - [Overview](pipelines/overview.md)
   - [Transformations](pipelines/transformations.md)
   - [Chaining](pipelines/chaining.md)
   - [Examples](pipelines/examples.md)
 
-- Core Concepts
+- [Core Concepts](core-concepts/README.md)
   - [Sessions and Connections](core-concepts/sessions.md)
   - [Query Execution](core-concepts/queries.md)
   - [Values](core-concepts/values.md)
   - [Records and Extraction](core-concepts/records.md)
   - [Errors](core-concepts/errors.md)
 
-- Query Building
+- [Query Building](query-building/README.md)
   - [Query Builder DSL](query-building/query-builder.md)
   - [Parameters](query-building/parameters.md)
   - [Programmatic Building](query-building/programmatic.md)
   - [Common Patterns](query-building/patterns.md)
 
-- Advanced
+- [Advanced](advanced/README.md)
   - [Transactions](advanced/transactions.md)
   - [Transaction DSL](advanced/tx-dsl.md)
   - [Streaming](advanced/streaming.md)
   - [Concurrency](advanced/concurrency.md)
   - [Pooling](advanced/pooling.md)
 
-- Extractors
+- [Extractors](extractors/README.md)
   - [Basics](extractors/basics.md)
   - [Applicative](extractors/applicative.md)
   - [Composite](extractors/composite.md)
   - [Graph Entities](extractors/graph.md)
   - [Custom Extractors](extractors/custom.md)
 
-- Graph Operations
+- [Graph Operations](graph-operations/README.md)
   - [Nodes](graph-operations/nodes.md)
   - [Relationships](graph-operations/relationships.md)
   - [Paths](graph-operations/paths.md)
   - [Lenses](graph-operations/lenses.md)
 
-- Examples
+- [Examples](examples/README.md)
   - [User Management](examples/user-management.md)
   - [Social Network](examples/social-network.md)
   - [Recommendations](examples/recommendations.md)
   - [ETL Pipeline](examples/etl-pipeline.md)
   - [Graph Analytics](examples/analytics.md)
 
-- API Reference
+- [API Reference](api-reference/README.md)
   - [Value](api-reference/value.md)
   - [Record](api-reference/record.md)
   - [Extract](api-reference/extract.md)
@@ -62,16 +62,16 @@
   - [Error](api-reference/error.md)
   - [Config](api-reference/config.md)
 
-- Migration
+- [Migration](migration/README.md)
   - [Benchmarks](migration/benchmarks.md)
 
-- Troubleshooting
+- [Troubleshooting](troubleshooting/README.md)
   - [Common Errors](troubleshooting/common-errors.md)
   - [Debugging](troubleshooting/debugging.md)
   - [FAQ](troubleshooting/faq.md)
   - [Limitations](troubleshooting/limitations.md)
 
-- Best Practices
+- [Best Practices](best-practices/README.md)
   - [Performance](best-practices/performance.md)
   - [Memory](best-practices/memory.md)
   - [Errors](best-practices/errors.md)

@@ -1,6 +1,8 @@
+[book]
 title = "neo4j_eio User Guide"
 description = "User documentation for the OCaml Eio-based Neo4j driver"
 language = "en"
+src = "src"
 
 [build]
 create-missing = true
@@ -8,4 +10,3 @@ create-missing = true
 [output.html]
 git-repository-url = ""
 preferred-dark-theme = "ayu"
-
