@@ -67,3 +67,18 @@
  (name lens_composition)
  (modules lens_composition)
  (libraries neo4j_eio eio eio_main))
+
+(executable
+ (name query_builder_dsl)
+ (modules query_builder_dsl)
+ (libraries neo4j_eio eio eio_main))
+
+(executable
+ (name transaction_dsl)
+ (modules transaction_dsl)
+ (libraries neo4j_eio eio eio_main))
+
+(executable
+ (name dsl_patterns)
+ (modules dsl_patterns)
+ (libraries neo4j_eio eio eio_main))
