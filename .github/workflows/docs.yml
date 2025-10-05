@@ -36,13 +36,8 @@ jobs:
             -w /workspace \
             ocaml/opam:ubuntu-22.04-ocaml-5.2 \
             bash -c '
-              # Install dune and odoc
-              opam install dune odoc --yes
-              eval $(opam env)
-
-              # Pin and install project dependencies
-              opam pin add neo4j_eio . --no-action --yes
-              opam install neo4j_eio --deps-only --with-doc --yes
+              # Install build tools and all dependencies
+              opam install dune odoc eio eio_main cstruct angstrom tls-eio x509 ca-certs domain-name alcotest --yes
               eval $(opam env)
 
               # Convert markdown files to mld (skip SUMMARY.md and README.md)
