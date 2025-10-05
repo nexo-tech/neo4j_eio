@@ -1,0 +1,3 @@
+(executable
+ (name benchmarks)
+ (libraries neo4j_eio eio eio_main unix))
