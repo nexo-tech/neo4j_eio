@@ -59,6 +59,9 @@ and urelationship = { urel_id : int64; urel_type : string; urel_props : value St
 
 and path = { path_nodes : node list; path_rels : urelationship list; path_seq : int list }
 
+(* Record type - a row returned from a query with named fields *)
+type record = value StringMap.t
+
 (* Pretty printers for debugging *)
 val pp_point2d : Format.formatter -> point2d -> unit
 val pp_point3d : Format.formatter -> point3d -> unit
@@ -86,3 +89,6 @@ val text : string -> value
 val bytes : string -> value
 val list : value list -> value
 val map : value StringMap.t -> value
+
+(* Record helper - extract a value by field name *)
+val at : record -> string -> value option

@@ -59,6 +59,9 @@ and urelationship = { urel_id : int64; urel_type : string; urel_props : value St
 
 and path = { path_nodes : node list; path_rels : urelationship list; path_seq : int list }
 
+(* Record type - a row returned from a query with named fields *)
+type record = value StringMap.t
+
 let pp_point2d ppf (p : point2d) =
   Format.fprintf ppf "Point2D(srid=%Ld, x=%g, y=%g)" p.srid p.x p.y
 
@@ -178,3 +181,7 @@ let text s = Text s
 let bytes b = Bytes b
 let list l = List l
 let map m = Map m
+
+(* Record helper - extract a value by field name *)
+let at record key =
+  StringMap.find_opt key record
