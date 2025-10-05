@@ -76,12 +76,12 @@ let example_error_recovery session =
   (* Second query should work immediately (auto-reset done) *)
   match Neo4j.query session ~statement:"RETURN 42 AS answer" () with
   | Ok [record] ->
-      (match Value.at record "answer" with
-       | Some (Value.Int n) ->
+      (match Record.at_int record "answer" with
+       | Ok n ->
            Printf.printf "  ✓ Next query works immediately, got: %Ld\n" n;
            Printf.printf "  ✓ No manual reset needed!\n"
-       | _ ->
-           Printf.printf "  ✗ Unexpected value type\n")
+       | Error e ->
+           Printf.printf "  ✗ Decode error: %a\n" Record.pp_decode_error e)
   | Ok _ ->
       Printf.printf "  ✗ Unexpected result format\n"
   | Error e ->

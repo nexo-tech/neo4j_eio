@@ -199,25 +199,42 @@ let params = props [
 
 ### Result Pattern Matching
 ```ocaml
-(* Single field result *)
+(* Single field result - RECOMMENDED: Use Record.at_* functions *)
 match query session ~statement:"RETURN 1 AS n" () with
-| Ok [Value.Int n] -> Printf.printf "Got: %Ld\n" n
+| Ok [record] ->
+    (match Record.at_int record "n" with
+     | Ok n -> Printf.printf "Got: %Ld\n" n
+     | Error e -> Printf.eprintf "Decode error: %a\n" Record.pp_decode_error e)
 | Ok _ -> Printf.printf "Unexpected format\n"
 | Error e -> Printf.eprintf "Error: %s\n" (Error.to_string e)
 
-(* Multiple field result *)
+(* Multiple field result - clean with Record.at_* *)
 match query session ~statement:"RETURN 1 AS a, 2 AS b" () with
-| Ok [Value.Int a; Value.Int b] -> Printf.printf "a=%Ld b=%Ld\n" a b
+| Ok [record] ->
+    (match Record.at_int record "a", Record.at_int record "b" with
+     | Ok a, Ok b -> Printf.printf "a=%Ld b=%Ld\n" a b
+     | _ -> Printf.printf "Decode error\n")
 | Ok _ -> Printf.printf "Unexpected format\n"
 | Error e -> Printf.eprintf "Error: %s\n" (Error.to_string e)
 
 (* Multiple record result (UNWIND) *)
 match query session ~statement:"UNWIND [1,2,3] AS n RETURN n" () with
-| Ok values ->
-    List.iter (function
-      | Value.Int n -> Printf.printf "%Ld\n" n
-      | _ -> ()
-    ) values
+| Ok records ->
+    List.iter (fun record ->
+      match Record.at_int record "n" with
+      | Ok n -> Printf.printf "%Ld\n" n
+      | Error _ -> ()
+    ) records
+| Error e -> Printf.eprintf "Error: %s\n" (Error.to_string e)
+
+(* Alternative: Use Value.at for generic value access *)
+match query session ~statement:"RETURN 1 AS n" () with
+| Ok [record] ->
+    (match Value.at record "n" with
+     | Some (Value.Int n) -> Printf.printf "Got: %Ld\n" n
+     | Some _ -> Printf.printf "Wrong type\n"
+     | None -> Printf.printf "Key not found\n")
+| Ok _ -> Printf.printf "Unexpected format\n"
 | Error e -> Printf.eprintf "Error: %s\n" (Error.to_string e)
 ```
 

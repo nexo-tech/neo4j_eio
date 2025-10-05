@@ -11,12 +11,12 @@ let example_basic_return session =
     ~statement:"RETURN 1 AS num, 'hello' AS text, true AS flag"
     () with
   | Ok [record] ->
-      (match Value.at record "num", Value.at record "text", Value.at record "flag" with
-       | Some (Value.Int n), Some (Value.Text s), Some (Value.Bool b) ->
+      (match Record.at_int record "num", Record.at_text record "text", Record.at_bool record "flag" with
+       | Ok n, Ok s, Ok b ->
            Printf.printf "  Results: num=%Ld, text=%s, flag=%b\n" n s b;
-           Printf.printf "  ✓ Basic RETURN works (using named fields!)\n"
+           Printf.printf "  ✓ Basic RETURN works!\n"
        | _ ->
-           Printf.printf "  ✗ Unexpected value types\n")
+           Printf.printf "  ✗ Decode error\n")
   | Ok _ ->
       Printf.printf "  ✗ Unexpected result format\n"
   | Error e ->
@@ -35,13 +35,13 @@ let example_query_with_params session =
     ])
     () with
   | Ok [record] ->
-      (match Value.at record "doubled", Value.at record "echo" with
-       | Some (Value.Int doubled), Some (Value.Text echo) ->
+      (match Record.at_int record "doubled", Record.at_text record "echo" with
+       | Ok doubled, Ok echo ->
            Printf.printf "  Parameters sent: num=21, text='Hello, Neo4j!'\n";
            Printf.printf "  Results: doubled=%Ld, echo=%s\n" doubled echo;
-           Printf.printf "  ✓ Parameter substitution works (with field names!)\n"
+           Printf.printf "  ✓ Parameter substitution works!\n"
        | _ ->
-           Printf.printf "  ✗ Unexpected value types\n")
+           Printf.printf "  ✗ Decode error\n")
   | Ok _ ->
       Printf.printf "  ✗ Unexpected result format\n"
   | Error e ->
@@ -101,22 +101,22 @@ let example_value_extraction session =
     () with
   | Ok [record] ->
       Printf.printf "  Extracted values:\n";
-      (match Value.at record "int_val" with
-       | Some (Value.Int i) -> Printf.printf "    int: %Ld\n" i
-       | _ -> ());
-      (match Value.at record "float_val" with
-       | Some (Value.Float f) -> Printf.printf "    float: %f\n" f
-       | _ -> ());
-      (match Value.at record "text_val" with
-       | Some (Value.Text t) -> Printf.printf "    text: %s\n" t
-       | _ -> ());
-      (match Value.at record "bool_val" with
-       | Some (Value.Bool b) -> Printf.printf "    bool: %b\n" b
-       | _ -> ());
-      (match Value.at record "null_val" with
-       | Some Value.Null -> Printf.printf "    null: (null)\n"
-       | _ -> ());
-      Printf.printf "  ✓ All value types extracted by field name\n"
+      (match Record.at_int record "int_val" with
+       | Ok i -> Printf.printf "    int: %Ld\n" i
+       | Error _ -> ());
+      (match Record.at_float record "float_val" with
+       | Ok f -> Printf.printf "    float: %f\n" f
+       | Error _ -> ());
+      (match Record.at_text record "text_val" with
+       | Ok t -> Printf.printf "    text: %s\n" t
+       | Error _ -> ());
+      (match Record.at_bool record "bool_val" with
+       | Ok b -> Printf.printf "    bool: %b\n" b
+       | Error _ -> ());
+      (match Record.at_unit record "null_val" with
+       | Ok () -> Printf.printf "    null: (null)\n"
+       | Error _ -> ());
+      Printf.printf "  ✓ All value types extracted!\n"
   | Ok _ ->
       Printf.printf "  ✗ Unexpected result format\n"
   | Error e ->
@@ -132,11 +132,11 @@ let example_unwind_multiple_values session =
   | Ok records ->
       Printf.printf "  UNWIND returned %d records: " (List.length records);
       List.iter (fun record ->
-        match Value.at record "n" with
-        | Some (Value.Int n) -> Printf.printf "%Ld " n
-        | _ -> Printf.printf "? "
+        match Record.at_int record "n" with
+        | Ok n -> Printf.printf "%Ld " n
+        | Error _ -> Printf.printf "? "
       ) records;
-      Printf.printf "\n  ✓ UNWIND works with named fields\n"
+      Printf.printf "\n  ✓ UNWIND works!\n"
   | Error e ->
       Printf.eprintf "  ✗ Query failed: %s\n" (Error.to_string e)
 
@@ -159,18 +159,18 @@ let example_nested_properties session =
     ])
     () with
   | Ok [record] ->
-      (match Value.at record "name", Value.at record "age" with
-       | Some (Value.Text name), Some (Value.Int age) ->
+      (match Record.at_text record "name", Record.at_int record "age" with
+       | Ok name, Ok age ->
            Printf.printf "  Created person with nested properties:\n";
            Printf.printf "    name: %s\n" name;
            Printf.printf "    age: %Ld\n" age;
-           Printf.printf "  ✓ Nested property access with field names\n";
+           Printf.printf "  ✓ Nested property access works!\n";
            (* Cleanup *)
            let _ = query_ session
              ~statement:(Printf.sprintf "MATCH (n:%s) DELETE n" label)
              () in ()
        | _ ->
-           Printf.printf "  ✗ Unexpected value types\n")
+           Printf.printf "  ✗ Decode error\n")
   | Ok _ ->
       Printf.printf "  ✗ Unexpected result format\n"
   | Error e ->
@@ -189,13 +189,13 @@ let example_multiple_params session =
     ])
     () with
   | Ok [record] ->
-      (match Value.at record "sum", Value.at record "product" with
-       | Some (Value.Int sum), Some (Value.Int product) ->
+      (match Record.at_int record "sum", Record.at_int record "product" with
+       | Ok sum, Ok product ->
            Printf.printf "  Input: a=7, b=6\n";
            Printf.printf "  Results: sum=%Ld, product=%Ld\n" sum product;
-           Printf.printf "  ✓ Multiple parameters with named results\n"
+           Printf.printf "  ✓ Multiple parameters work!\n"
        | _ ->
-           Printf.printf "  ✗ Unexpected value types\n")
+           Printf.printf "  ✗ Decode error\n")
   | Ok _ ->
       Printf.printf "  ✗ Unexpected result format\n"
   | Error e ->
