@@ -42,3 +42,8 @@
  (name batch)
  (modules batch)
  (libraries neo4j_eio eio eio_main unix))
+
+(executable
+ (name cypher_fluent_api)
+ (modules cypher_fluent_api)
+ (libraries neo4j_eio eio eio_main))
