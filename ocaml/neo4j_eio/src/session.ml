@@ -134,6 +134,115 @@ let run_stream t ~statement ?(parameters = Value.StringMap.empty) ?(fetch_size =
           Error (Error.Protocol "Unexpected RUN response")
     )
 
+(* Record-based stream type *)
+type record_stream = {
+  fetch_next_records: unit -> (Record.t list, Error.t) result;
+  mutable exhausted: bool;
+}
+
+(* Execute a query and return a record stream for lazy consumption *)
+let run_stream_records t ~statement ?(parameters = Value.StringMap.empty) ?(fetch_size = 1000L) () =
+  if t.closed then
+    Error (Error.Protocol "Session is closed")
+  else
+    (* Send RUN immediately *)
+    Mutex.use_rw t.mutex ~protect:true (fun () ->
+      let run_msg = Protocol.build_run ~statement ~parameters () in
+      Connection.send_message t.flow run_msg;
+
+      (* Receive RUN response *)
+      match Connection.recv_response t.flow with
+      | Error e -> Error (Error.Protocol ("RUN decode failed: " ^ e))
+      | Ok (Value.Struct { signature = 0x70; fields = [Value.Map meta] }) ->
+          (* SUCCESS - extract field names from metadata *)
+          let field_names = match Value.StringMap.find_opt "fields" meta with
+            | Some (Value.List names) ->
+                List.filter_map (function Value.Text name -> Some name | _ -> None) names
+            | _ -> []
+          in
+
+          (* Create record stream *)
+          let exhausted_ref = ref false in
+          let rec stream = {
+            fetch_next_records = (fun () ->
+              (* Check if already exhausted *)
+              if !exhausted_ref then
+                Ok []
+              else
+                Mutex.use_rw t.mutex ~protect:true (fun () ->
+                  (* Send PULL for next chunk *)
+                  let pull_msg = Protocol.build_pull ~n:(Some fetch_size) () in
+                  Connection.send_message t.flow pull_msg;
+
+                  (* Collect records from this PULL *)
+                  let rec collect_chunk acc =
+                    match Connection.recv_response t.flow with
+                    | Error e -> Error (Error.Protocol ("PULL decode failed: " ^ e))
+                    | Ok (Value.Struct { signature = 0x71; fields = [Value.List values] }) ->
+                        (* RECORD - combine field names with values to create a record *)
+                        let record =
+                          List.fold_left2 (fun acc name value ->
+                            Value.StringMap.add name value acc
+                          ) Value.StringMap.empty field_names values
+                        in
+                        collect_chunk (record :: acc)
+                    | Ok (Value.Struct { signature = 0x70; fields = [Value.Map meta] }) ->
+                        (* SUCCESS - chunk complete *)
+                        let has_more = match Value.StringMap.find_opt "has_more" meta with
+                          | Some (Value.Bool b) -> b
+                          | _ -> false
+                        in
+                        exhausted_ref := not has_more;
+                        stream.exhausted <- not has_more;
+                        Ok (List.rev acc)
+                    | Ok (Value.Struct { signature = 0x70; _ }) ->
+                        (* SUCCESS without metadata - stream exhausted *)
+                        exhausted_ref := true;
+                        stream.exhausted <- true;
+                        Ok (List.rev acc)
+                    | Ok (Value.Struct { signature = 0x7F; fields }) ->
+                        (* FAILURE - automatically reset session *)
+                        exhausted_ref := true;
+                        stream.exhausted <- true;
+                        let err = match fields with
+                        | Value.Map m :: _ -> Error.from_failure_map m
+                        | _ -> Error.Protocol "Query failed"
+                        in
+                        (* Auto-reset like hasbolt does, but not in transactions *)
+                        (if not t.in_transaction then
+                          let _ = reset_internal t in ());
+                        Error err
+                    | Ok _ ->
+                        exhausted_ref := true;
+                        stream.exhausted <- true;
+                        Error (Error.Protocol "Unexpected response during PULL")
+                  in
+                  collect_chunk []
+                )
+            );
+            exhausted = false;
+          }
+          in
+          Ok stream
+      | Ok (Value.Struct { signature = 0x70; _ }) ->
+          (* SUCCESS without proper metadata - can't create record stream without field names *)
+          Error (Error.Protocol "RUN SUCCESS missing field metadata")
+      | Ok (Value.Struct { signature = 0x7E; _ }) ->
+          Error (Error.Protocol "RUN was ignored - session in failed state")
+      | Ok (Value.Struct { signature = 0x7F; fields }) ->
+          (* FAILURE - automatically reset session *)
+          let err = match fields with
+          | Value.Map m :: _ -> Error.from_failure_map m
+          | _ -> Error.Protocol "RUN failed"
+          in
+          (* Auto-reset like hasbolt does, but not in transactions *)
+          (if not t.in_transaction then
+            let _ = reset_internal t in ());
+          Error err
+      | Ok _ ->
+          Error (Error.Protocol "Unexpected RUN response")
+    )
+
 (* Execute a query with serialized access - strict materialization *)
 let run t ~statement ?(parameters = Value.StringMap.empty) ?(fetch_size = -1L) () =
   if t.closed then
@@ -342,12 +451,28 @@ let run_records t ~statement ?(parameters = Value.StringMap.empty) ?(fetch_size 
     )
 
 (* Helper to consume entire stream into a list *)
-let stream_to_list stream =
+let stream_to_list (stream : stream) : (Value.value list, Error.t) result =
   let rec collect acc =
     if stream.exhausted then
       Ok (List.rev acc |> List.flatten)
     else
       match stream.fetch_next () with
+      | Error e -> Error e
+      | Ok chunk ->
+          if List.length chunk = 0 && stream.exhausted then
+            Ok (List.rev acc |> List.flatten)
+          else
+            collect (chunk :: acc)
+  in
+  collect []
+
+(* Convert a record stream to a list by fetching all chunks *)
+let record_stream_to_list (stream : record_stream) : (Record.t list, Error.t) result =
+  let rec collect acc =
+    if stream.exhausted then
+      Ok (List.rev acc |> List.flatten)
+    else
+      match stream.fetch_next_records () with
       | Error e -> Error e
       | Ok chunk ->
           if List.length chunk = 0 && stream.exhausted then

@@ -17,3 +17,8 @@
  (name transactions)
  (modules transactions)
  (libraries neo4j_eio eio eio_main))
+
+(executable
+ (name streaming)
+ (modules streaming)
+ (libraries neo4j_eio eio eio_main))
