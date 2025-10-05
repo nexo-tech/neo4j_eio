@@ -37,3 +37,8 @@
  (name traversal)
  (modules traversal)
  (libraries neo4j_eio eio eio_main))
+
+(executable
+ (name batch)
+ (modules batch)
+ (libraries neo4j_eio eio eio_main unix))
