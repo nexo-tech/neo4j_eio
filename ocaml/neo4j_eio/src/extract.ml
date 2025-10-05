@@ -129,3 +129,51 @@ let (<*>) ef ex = fun record ->
   | _, Error e -> Error e
 
 let (<$>) f e = map_extract f e
+
+(* Composite extractors - common patterns *)
+
+let pair k1 k2 d1 d2 =
+  let+ v1 = field k1 d1
+  and+ v2 = field k2 d2 in
+  (v1, v2)
+
+let triple k1 k2 k3 d1 d2 d3 =
+  let+ v1 = field k1 d1
+  and+ v2 = field k2 d2
+  and+ v3 = field k3 d3 in
+  (v1, v2, v3)
+
+let text_int k1 k2 =
+  let+ t = text k1
+  and+ i = int k2 in
+  (t, i)
+
+let text_list key =
+  list key Record.exact_text
+
+let int_list key =
+  list key Record.exact_int
+
+let node_props key =
+  let+ n = node key in
+  n.Value.props
+
+let node_labels key =
+  let+ n = node key in
+  n.Value.labels
+
+let node_id key =
+  let+ n = node key in
+  n.Value.node_id
+
+let rel_type key =
+  let+ r = relationship key in
+  r.Value.rel_type
+
+let rel_props key =
+  let+ r = relationship key in
+  r.Value.rel_props
+
+let rel_id key =
+  let+ r = relationship key in
+  r.Value.rel_id

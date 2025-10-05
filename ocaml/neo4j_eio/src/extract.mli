@@ -185,3 +185,41 @@ val (<*>) : ('a -> 'b) t -> 'a t -> 'b t
 
 val (<$>) : ('a -> 'b) -> 'a t -> 'b t
 (** [f <$> e] is infix map (functor). *)
+
+(** {1 Composite Extractors}
+
+    These are higher-level extractors that combine common patterns,
+    making the API easier to use for frequent use cases. *)
+
+val pair : string -> string -> (Record.t -> string -> ('a, Record.decode_error) result) -> (Record.t -> string -> ('b, Record.decode_error) result) -> ('a * 'b) t
+(** [pair k1 k2 d1 d2] extracts two fields as a tuple using the given decoders. *)
+
+val triple : string -> string -> string -> (Record.t -> string -> ('a, Record.decode_error) result) -> (Record.t -> string -> ('b, Record.decode_error) result) -> (Record.t -> string -> ('c, Record.decode_error) result) -> ('a * 'b * 'c) t
+(** [triple k1 k2 k3 d1 d2 d3] extracts three fields as a tuple using the given decoders. *)
+
+val text_int : string -> string -> (string * int64) t
+(** [text_int k1 k2] extracts two fields: text and int. Common for name+id patterns. *)
+
+val text_list : string -> string list t
+(** [text_list key] extracts a list of text values from a list field. *)
+
+val int_list : string -> int64 list t
+(** [int_list key] extracts a list of int64 values from a list field. *)
+
+val node_props : string -> Value.value Value.StringMap.t t
+(** [node_props key] extracts a node's properties map. *)
+
+val node_labels : string -> string list t
+(** [node_labels key] extracts a node's labels. *)
+
+val node_id : string -> int64 t
+(** [node_id key] extracts a node's ID. *)
+
+val rel_type : string -> string t
+(** [rel_type key] extracts a relationship's type. *)
+
+val rel_props : string -> Value.value Value.StringMap.t t
+(** [rel_props key] extracts a relationship's properties. *)
+
+val rel_id : string -> int64 t
+(** [rel_id key] extracts a relationship's ID. *)
