@@ -200,3 +200,9 @@
  (modules traversal_test)
  (libraries neo4j_eio eio eio_main alcotest test_helper)
  (action (run %{exe:traversal_test.exe})))
+
+(test
+ (name query_builder_test)
+ (modules query_builder_test)
+ (libraries neo4j_eio eio eio_main alcotest test_helper)
+ (action (run %{exe:query_builder_test.exe})))
