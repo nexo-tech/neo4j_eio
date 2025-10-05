@@ -12,3 +12,8 @@
  (name record_extraction)
  (modules record_extraction)
  (libraries neo4j_eio eio eio_main))
+
+(executable
+ (name transactions)
+ (modules transactions)
+ (libraries neo4j_eio eio eio_main))
