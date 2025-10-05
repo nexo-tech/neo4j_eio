@@ -25,9 +25,9 @@ Create user (idempotent with MERGE)
 let create_user session ~username ~name ~email =
   Query_builder.execute
     (Query_builder.raw
-       "MERGE (u:User {username: $username})\n\
-        ON CREATE SET u.name = $name, u.email = $email, u.createdAt = timestamp()\n\
-        RETURN u.username AS username, u.name AS name, u.email AS email"
+       {|MERGE (u:User {username: $username})
+        ON CREATE SET u.name = $name, u.email = $email, u.createdAt = timestamp()
+        RETURN u.username AS username, u.name AS name, u.email AS email|}
      |> Query_builder.with_params [
           ("username", Value.Text username);
           ("name", Value.Text name);
@@ -41,8 +41,8 @@ Assign role to user
 let assign_role session ~username ~role =
   Query_builder.execute_unit
     (Query_builder.raw
-       "MATCH (u:User {username: $username}), (r:Role {name: $role})\n\
-        MERGE (u)-[:HAS_ROLE]->(r)"
+       {|MATCH (u:User {username: $username}), (r:Role {name: $role})
+        MERGE (u)-[:HAS_ROLE]->(r)|}
      |> Query_builder.with_params [
           ("username", Value.Text username);
           ("role", Value.Text role);
@@ -55,9 +55,9 @@ Add friendship (symmetric)
 let add_friendship session ~a ~b =
   Query_builder.execute_unit
     (Query_builder.raw
-       "MATCH (a:User {username: $a}), (b:User {username: $b})\n\
-        MERGE (a)-[:FRIEND_WITH]->(b)\n\
-        MERGE (b)-[:FRIEND_WITH]->(a)"
+       {|MATCH (a:User {username: $a}), (b:User {username: $b})
+        MERGE (a)-[:FRIEND_WITH]->(b)
+        MERGE (b)-[:FRIEND_WITH]->(a)|}
      |> Query_builder.with_params [ ("a", Value.Text a); ("b", Value.Text b) ])
     session
 ```
@@ -67,12 +67,12 @@ Fetch profile with roles and friends
 let fetch_profile session ~username =
   Query_builder.execute
     (Query_builder.raw
-       "MATCH (u:User {username: $username})\n\
-        OPTIONAL MATCH (u)-[:HAS_ROLE]->(r:Role)\n\
-        OPTIONAL MATCH (u)-[:FRIEND_WITH]->(f:User)\n\
-        RETURN u.name AS name, u.email AS email,\n\
-               collect(DISTINCT r.name) AS roles,\n\
-               collect(DISTINCT f.username) AS friends"
+       {|MATCH (u:User {username: $username})
+        OPTIONAL MATCH (u)-[:HAS_ROLE]->(r:Role)
+        OPTIONAL MATCH (u)-[:FRIEND_WITH]->(f:User)
+        RETURN u.name AS name, u.email AS email,
+               collect(DISTINCT r.name) AS roles,
+               collect(DISTINCT f.username) AS friends|}
      |> Query_builder.with_param ("username", Value.Text username))
     session
 ```
@@ -86,8 +86,8 @@ let register_user_tx ~username ~name ~email ~role =
   let tx =
     let* () = exec_query_builder_unit
         (Query_builder.raw
-           "MERGE (u:User {username: $username})\n\
-            ON CREATE SET u.name = $name, u.email = $email, u.createdAt = timestamp()"
+           {|MERGE (u:User {username: $username})
+            ON CREATE SET u.name = $name, u.email = $email, u.createdAt = timestamp()|}
          |> Query_builder.with_params [
               ("username", Value.Text username);
               ("name", Value.Text name);
@@ -95,8 +95,8 @@ let register_user_tx ~username ~name ~email ~role =
             ]) in
     let* () = exec_query_builder_unit
         (Query_builder.raw
-           "MATCH (u:User {username: $username}), (r:Role {name: $role})\n\
-            MERGE (u)-[:HAS_ROLE]->(r)"
+           {|MATCH (u:User {username: $username}), (r:Role {name: $role})
+            MERGE (u)-[:HAS_ROLE]->(r)|}
          |> Query_builder.with_params [
               ("username", Value.Text username);
               ("role", Value.Text role);

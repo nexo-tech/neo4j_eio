@@ -19,13 +19,22 @@ let bootstrap_graph session label =
   (* Create users *)
   let _ = Query_builder.execute_unit
     (Query_builder.raw (Printf.sprintf
-       "UNWIND [\n         {u:'alice', n:'Alice'},\n         {u:'bob', n:'Bob'},\n         {u:'carol', n:'Carol'},\n         {u:'dave', n:'Dave'},\n         {u:'erin', n:'Erin'}\n       ] AS x\n       MERGE (:User:%s {username: x.u, name: x.n})"
+       {|UNWIND [
+         {u:'alice', n:'Alice'},
+         {u:'bob', n:'Bob'},
+         {u:'carol', n:'Carol'},
+         {u:'dave', n:'Dave'},
+         {u:'erin', n:'Erin'}
+       ] AS x
+       MERGE (:User:%s {username: x.u, name: x.n})|}
        label))
     session in
   (* Friendships (bidirectional) *)
   let mk a b =
     Query_builder.raw (Printf.sprintf
-      "MATCH (a:User:%s {username: $a}), (b:User:%s {username: $b})\nMERGE (a)-[:FRIEND_WITH]->(b)\nMERGE (b)-[:FRIEND_WITH]->(a)"
+      {|MATCH (a:User:%s {username: $a}), (b:User:%s {username: $b})
+MERGE (a)-[:FRIEND_WITH]->(b)
+MERGE (b)-[:FRIEND_WITH]->(a)|}
       label label)
     |> Query_builder.with_params [("a", Value.Text a); ("b", Value.Text b)]
   in
@@ -41,11 +50,11 @@ Friend recommendations (friends-of-friends not already friends)
 let recommend_friends session label ~for_user ~limit =
   Query_builder.execute
     (Query_builder.raw (Printf.sprintf
-       "MATCH (me:User:%s {username: $u})-[:FRIEND_WITH]->(:User)-[:FRIEND_WITH]->(cand:User:%s)\n\
-        WHERE cand <> me AND NOT (me)-[:FRIEND_WITH]->(cand)\n\
-        RETURN cand.username AS user, count(*) AS score\n\
-        ORDER BY score DESC, user ASC\n\
-        LIMIT $k"
+       {|MATCH (me:User:%s {username: $u})-[:FRIEND_WITH]->(:User)-[:FRIEND_WITH]->(cand:User:%s)
+        WHERE cand <> me AND NOT (me)-[:FRIEND_WITH]->(cand)
+        RETURN cand.username AS user, count(*) AS score
+        ORDER BY score DESC, user ASC
+        LIMIT $k|}
        label label)
      |> Query_builder.with_params [
           ("u", Value.Text for_user);
@@ -59,9 +68,9 @@ Mutual friends between two users
 let mutual_friends session label ~a ~b =
   Query_builder.execute
     (Query_builder.raw (Printf.sprintf
-       "MATCH (a:User:%s {username: $a})-[:FRIEND_WITH]->(f:User:%s)<-[:FRIEND_WITH]-(b:User:%s {username: $b})\n\
-        RETURN f.username AS user\n\
-        ORDER BY user"
+       {|MATCH (a:User:%s {username: $a})-[:FRIEND_WITH]->(f:User:%s)<-[:FRIEND_WITH]-(b:User:%s {username: $b})
+        RETURN f.username AS user
+        ORDER BY user|}
        label label label)
      |> Query_builder.with_params [ ("a", Value.Text a); ("b", Value.Text b) ])
     session
@@ -72,9 +81,9 @@ Shortest social path (degrees of separation)
 let degrees_of_separation session label ~a ~b =
   Query_builder.execute
     (Query_builder.raw (Printf.sprintf
-       "MATCH (a:User:%s {username: $a}), (b:User:%s {username: $b}),\n\
-        p = shortestPath((a)-[:FRIEND_WITH*]-(b))\n\
-        RETURN [n IN nodes(p) | n.username] AS path, length(p) AS hops"
+       {|MATCH (a:User:%s {username: $a}), (b:User:%s {username: $b}),
+        p = shortestPath((a)-[:FRIEND_WITH*]-(b))
+        RETURN [n IN nodes(p) | n.username] AS path, length(p) AS hops|}
        label label)
      |> Query_builder.with_params [ ("a", Value.Text a); ("b", Value.Text b) ])
     session

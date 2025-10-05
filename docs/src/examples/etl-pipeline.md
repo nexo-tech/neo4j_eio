@@ -22,7 +22,13 @@ open Neo4j_eio
 let stage_orders session label =
   Query_builder.execute_unit
     (Query_builder.raw (Printf.sprintf
-       "UNWIND [\n         {u:'alice', name:'Alice', sku:'A', title:'Laptop',  qty:1, price:1200},\n         {u:'alice', name:'Alice', sku:'B', title:'Mouse',   qty:2, price:  25},\n         {u:'bob',   name:'Bob',   sku:'B', title:'Mouse',   qty:1, price:  25},\n         {u:'bob',   name:'Bob',   sku:'C', title:'Keyboard',qty:1, price:  75}\n       ] AS x\n       MERGE (:RawOrder:%s {u: x.u, name: x.name, sku: x.sku, title: x.title, qty: x.qty, price: x.price})"
+       {|UNWIND [
+         {u:'alice', name:'Alice', sku:'A', title:'Laptop',  qty:1, price:1200},
+         {u:'alice', name:'Alice', sku:'B', title:'Mouse',   qty:2, price:  25},
+         {u:'bob',   name:'Bob',   sku:'B', title:'Mouse',   qty:1, price:  25},
+         {u:'bob',   name:'Bob',   sku:'C', title:'Keyboard',qty:1, price:  75}
+       ] AS x
+       MERGE (:RawOrder:%s {u: x.u, name: x.name, sku: x.sku, title: x.title, qty: x.qty, price: x.price})|}
        label))
     session
 ```
@@ -32,14 +38,14 @@ Load into target graph (all‑in‑Cypher)
 let load_graph_all_in_cypher session label =
   Query_builder.execute_unit
     (Query_builder.raw (Printf.sprintf
-       "MATCH (r:RawOrder:%s)\n\
-        MERGE (u:User:%s {username: r.u})\n\
-          ON CREATE SET u.name = r.name\n\
-        MERGE (i:Item:%s {sku: r.sku})\n\
-          ON CREATE SET i.title = r.title\n\
-        MERGE (u)-[p:PURCHASE]->(i)\n\
-          ON CREATE SET p.qty = r.qty, p.price = r.price, p.total = r.qty * r.price\n\
-          ON MATCH  SET p.qty = p.qty + r.qty, p.total = p.total + (r.qty * r.price)"
+       {|MATCH (r:RawOrder:%s)
+        MERGE (u:User:%s {username: r.u})
+          ON CREATE SET u.name = r.name
+        MERGE (i:Item:%s {sku: r.sku})
+          ON CREATE SET i.title = r.title
+        MERGE (u)-[p:PURCHASE]->(i)
+          ON CREATE SET p.qty = r.qty, p.price = r.price, p.total = r.qty * r.price
+          ON MATCH  SET p.qty = p.qty + r.qty, p.total = p.total + (r.qty * r.price)|}
        label label label))
     session
 ```
@@ -50,9 +56,9 @@ Optional: OCaml transform with Cypher pipeline
 let aggregate_orders session label =
   let rows = Query_builder.execute
     (Query_builder.raw (Printf.sprintf
-       "MATCH (r:RawOrder:%s)\n\
-        RETURN r.u AS u, r.name AS name, r.sku AS sku, r.title AS title,\n\
-               sum(r.qty) AS qty_total, sum(r.qty * r.price) AS amount_total"
+       {|MATCH (r:RawOrder:%s)
+        RETURN r.u AS u, r.name AS name, r.sku AS sku, r.title AS title,
+               sum(r.qty) AS qty_total, sum(r.qty * r.price) AS amount_total|}
        label)) session in
   match rows with
   | Error e -> Error e
@@ -62,11 +68,11 @@ let aggregate_orders session label =
         | Ok u, Ok name, Ok sku, Ok title, Ok qty, Ok amount ->
             let _ = Query_builder.execute_unit
               (Query_builder.raw (Printf.sprintf
-                 "MERGE (u:User:%s {username: $u}) ON CREATE SET u.name = $name\n\
-                  MERGE (i:Item:%s {sku: $sku}) ON CREATE SET i.title = $title\n\
-                  MERGE (u)-[p:PURCHASE]->(i)\n\
-                  ON CREATE SET p.qty = $qty, p.total = $amount\n\
-                  ON MATCH  SET p.qty = p.qty + $qty, p.total = p.total + $amount"
+                 {|MERGE (u:User:%s {username: $u}) ON CREATE SET u.name = $name
+                  MERGE (i:Item:%s {sku: $sku}) ON CREATE SET i.title = $title
+                  MERGE (u)-[p:PURCHASE]->(i)
+                  ON CREATE SET p.qty = $qty, p.total = $amount
+                  ON MATCH  SET p.qty = p.qty + $qty, p.total = p.total + $amount|}
                  label label)
                |> Query_builder.with_params [
                     ("u",     Value.Text u);

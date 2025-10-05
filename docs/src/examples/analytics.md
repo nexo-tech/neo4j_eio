@@ -18,7 +18,13 @@ let bootstrap_network session label =
   (* Users *)
   let _ = Query_builder.execute_unit
     (Query_builder.raw (Printf.sprintf
-       "UNWIND [\n         {u:'alice', n:'Alice'},\n         {u:'bob',   n:'Bob'},\n         {u:'carol', n:'Carol'},\n         {u:'dave',  n:'Dave'},\n         {u:'erin',  n:'Erin'}\n       ] AS x MERGE (:User:%s {username:x.u, name:x.n})"
+       {|UNWIND [
+         {u:'alice', n:'Alice'},
+         {u:'bob',   n:'Bob'},
+         {u:'carol', n:'Carol'},
+         {u:'dave',  n:'Dave'},
+         {u:'erin',  n:'Erin'}
+       ] AS x MERGE (:User:%s {username:x.u, name:x.n})|}
        label)) session in
   (* FOLLOWS edges (directed) *)
   let mk a b =
@@ -56,9 +62,9 @@ Triangle count (closed triads initiated by user)
 let triangle_count session label =
   Query_builder.execute
     (Query_builder.raw (Printf.sprintf
-       "MATCH (u:User:%s)-[:FOLLOWS]->(v:User:%s), (u)-[:FOLLOWS]->(w:User:%s), (v)-[:FOLLOWS]->(w)\n\
-        RETURN u.username AS user, count(DISTINCT w) AS triangles\n\
-        ORDER BY triangles DESC, user"
+       {|MATCH (u:User:%s)-[:FOLLOWS]->(v:User:%s), (u)-[:FOLLOWS]->(w:User:%s), (v)-[:FOLLOWS]->(w)
+        RETURN u.username AS user, count(DISTINCT w) AS triangles
+        ORDER BY triangles DESC, user|}
        label label label)) session
 ```
 
@@ -67,17 +73,17 @@ Local clustering coefficient (per‑user)
 let clustering_coefficient session label =
   Query_builder.execute
     (Query_builder.raw (Printf.sprintf
-       "MATCH (u:User:%s)-[:FOLLOWS]->(nbr:User:%s)\n\
-        WITH u, collect(DISTINCT nbr) AS N\n\
-        WITH u, N, size(N) AS n\n\
-        UNWIND N AS a\n\
-        UNWIND N AS b\n\
-        WITH u, n, a, b WHERE id(a) < id(b)\n\
-        MATCH (a)-[:FOLLOWS]->(b)\n\
-        WITH u, n, count(*) AS links\n\
-        RETURN u.username AS user,\n\
-               CASE WHEN n < 2 THEN 0.0 ELSE toFloat(2*links)/toFloat(n*(n-1)) END AS clustering\n\
-        ORDER BY clustering DESC, user"
+       {|MATCH (u:User:%s)-[:FOLLOWS]->(nbr:User:%s)
+        WITH u, collect(DISTINCT nbr) AS N
+        WITH u, N, size(N) AS n
+        UNWIND N AS a
+        UNWIND N AS b
+        WITH u, n, a, b WHERE id(a) < id(b)
+        MATCH (a)-[:FOLLOWS]->(b)
+        WITH u, n, count(*) AS links
+        RETURN u.username AS user,
+               CASE WHEN n < 2 THEN 0.0 ELSE toFloat(2*links)/toFloat(n*(n-1)) END AS clustering
+        ORDER BY clustering DESC, user|}
        label label)) session
 ```
 

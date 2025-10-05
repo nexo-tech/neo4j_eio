@@ -11,7 +11,8 @@ let test_basic_query_construction () =
            |> return ["p.name"; "p.age"]
            |> build in
   Alcotest.(check string) "simple match return"
-    "MATCH (p:Person)\nRETURN p.name, p.age" q1;
+    {|MATCH (p:Person)
+RETURN p.name, p.age|} q1;
 
   (* Test MATCH WHERE RETURN *)
   let q2 = match_ "(p:Person)"
@@ -19,7 +20,9 @@ let test_basic_query_construction () =
            |> return ["p.name"]
            |> build in
   Alcotest.(check string) "match where return"
-    "MATCH (p:Person)\nWHERE p.age > 18\nRETURN p.name" q2;
+    {|MATCH (p:Person)
+WHERE p.age > 18
+RETURN p.name|} q2;
 
   (* Test CREATE *)
   let q3 = create_node "(p:Person {name: 'Alice'})"
@@ -38,7 +41,9 @@ let test_where_combinations () =
            |> return ["p.name"]
            |> build in
   Alcotest.(check string) "where and"
-    "MATCH (p:Person)\nWHERE p.age > 18 AND p.active = true\nRETURN p.name" q1;
+    {|MATCH (p:Person)
+WHERE p.age > 18 AND p.active = true
+RETURN p.name|} q1;
 
   (* Test multiple AND *)
   let q2 = match_ "(p:Person)"
@@ -48,7 +53,9 @@ let test_where_combinations () =
            |> return ["p.name"]
            |> build in
   Alcotest.(check string) "multiple and"
-    "MATCH (p:Person)\nWHERE p.age > 18 AND p.active = true AND p.verified = true\nRETURN p.name" q2
+    {|MATCH (p:Person)
+WHERE p.age > 18 AND p.active = true AND p.verified = true
+RETURN p.name|} q2
 
 (** Test ORDER BY and LIMIT *)
 let test_order_limit () =
@@ -60,7 +67,9 @@ let test_order_limit () =
            |> order_by "p.age"
            |> build in
   Alcotest.(check string) "order by"
-    "MATCH (p:Person)\nRETURN p.name, p.age\nORDER BY p.age" q1;
+    {|MATCH (p:Person)
+RETURN p.name, p.age
+ORDER BY p.age|} q1;
 
   (* Test ORDER BY DESC *)
   let q2 = match_ "(p:Person)"
@@ -68,7 +77,9 @@ let test_order_limit () =
            |> order_by_desc "p.age"
            |> build in
   Alcotest.(check string) "order by desc"
-    "MATCH (p:Person)\nRETURN p.name, p.age\nORDER BY p.age DESC" q2;
+    {|MATCH (p:Person)
+RETURN p.name, p.age
+ORDER BY p.age DESC|} q2;
 
   (* Test LIMIT *)
   let q3 = match_ "(p:Person)"
@@ -76,7 +87,9 @@ let test_order_limit () =
            |> limit 10
            |> build in
   Alcotest.(check string) "limit"
-    "MATCH (p:Person)\nRETURN p.name\nLIMIT 10" q3;
+    {|MATCH (p:Person)
+RETURN p.name
+LIMIT 10|} q3;
 
   (* Test SKIP and LIMIT *)
   let q4 = match_ "(p:Person)"
@@ -86,7 +99,11 @@ let test_order_limit () =
            |> limit 10
            |> build in
   Alcotest.(check string) "skip and limit"
-    "MATCH (p:Person)\nRETURN p.name\nORDER BY p.name\nSKIP 20\nLIMIT 10" q4
+    {|MATCH (p:Person)
+RETURN p.name
+ORDER BY p.name
+SKIP 20
+LIMIT 10|} q4
 
 (** Test mutation queries *)
 let test_mutations () =
@@ -97,21 +114,24 @@ let test_mutations () =
            |> set ["p.age = 31"; "p.updated = timestamp()"]
            |> build in
   Alcotest.(check string) "set"
-    "MATCH (p:Person {name: 'Alice'})\nSET p.age = 31, p.updated = timestamp()" q1;
+    {|MATCH (p:Person {name: 'Alice'})
+SET p.age = 31, p.updated = timestamp()|} q1;
 
   (* Test DELETE *)
   let q2 = match_ "(p:Person {name: 'Bob'})"
            |> delete ["p"]
            |> build in
   Alcotest.(check string) "delete"
-    "MATCH (p:Person {name: 'Bob'})\nDELETE p" q2;
+    {|MATCH (p:Person {name: 'Bob'})
+DELETE p|} q2;
 
   (* Test DETACH DELETE *)
   let q3 = match_ "(p:Person {name: 'Charlie'})"
            |> detach_delete ["p"]
            |> build in
   Alcotest.(check string) "detach delete"
-    "MATCH (p:Person {name: 'Charlie'})\nDETACH DELETE p" q3
+    {|MATCH (p:Person {name: 'Charlie'})
+DETACH DELETE p|} q3
 
 (** Test MERGE and UNWIND *)
 let test_merge_unwind () =
@@ -122,14 +142,16 @@ let test_merge_unwind () =
            |> set ["p.lastSeen = timestamp()"]
            |> build in
   Alcotest.(check string) "merge"
-    "MERGE (p:Person {email: 'test@example.com'})\nSET p.lastSeen = timestamp()" q1;
+    {|MERGE (p:Person {email: 'test@example.com'})
+SET p.lastSeen = timestamp()|} q1;
 
   (* Test UNWIND *)
   let q2 = unwind "[1, 2, 3]" "x"
            |> return ["x"]
            |> build in
   Alcotest.(check string) "unwind"
-    "UNWIND [1, 2, 3] AS x\nRETURN x" q2
+    {|UNWIND [1, 2, 3] AS x
+RETURN x|} q2
 
 (** Test convenience constructors *)
 let test_convenience_constructors () =
@@ -141,13 +163,16 @@ let test_convenience_constructors () =
            |> return ["p.name"; "p.age"]
            |> build in
   Alcotest.(check string) "select"
-    "MATCH (p:Person)\nWHERE p.active = true\nRETURN p.name, p.age" q1;
+    {|MATCH (p:Person)
+WHERE p.active = true
+RETURN p.name, p.age|} q1;
 
   (* Test update *)
   let q2 = update "(p:Person {id: 1})" ["p.name = 'Updated'"]
            |> build in
   Alcotest.(check string) "update"
-    "MATCH (p:Person {id: 1})\nSET p.name = 'Updated'" q2
+    {|MATCH (p:Person {id: 1})
+SET p.name = 'Updated'|} q2
 
 (** Test WITH clause *)
 let test_with_clause () =
@@ -159,7 +184,10 @@ let test_with_clause () =
           |> return ["p.name"; "friendCount"]
           |> build in
   Alcotest.(check string) "with clause"
-    "MATCH (p:Person)\nWITH p, count(*) AS friendCount\nWHERE friendCount > 5\nRETURN p.name, friendCount" q
+    {|MATCH (p:Person)
+WITH p, count(*) AS friendCount
+WHERE friendCount > 5
+RETURN p.name, friendCount|} q
 
 (** Test RETURN DISTINCT *)
 let test_return_distinct () =
@@ -169,7 +197,8 @@ let test_return_distinct () =
           |> return_distinct ["p.city"]
           |> build in
   Alcotest.(check string) "return distinct"
-    "MATCH (p:Person)\nRETURN DISTINCT p.city" q
+    {|MATCH (p:Person)
+RETURN DISTINCT p.city|} q
 
 (** Integration test with Neo4j *)
 let test_query_builder_integration env cfg =

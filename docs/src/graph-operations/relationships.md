@@ -7,7 +7,8 @@ Create relationships
 let label = Printf.sprintf "User_%d" (Random.int 1_000_000) in
 let res = Query_builder.execute
   (Query_builder.raw (Printf.sprintf
-     "CREATE (a:%s {name: 'Alice'})-[r:KNOWS {since: 2020}]->(b:%s {name: 'Bob'})\nRETURN a AS a, r AS r, b AS b"
+     {|CREATE (a:%s {name: 'Alice'})-[r:KNOWS {since: 2020}]->(b:%s {name: 'Bob'})
+RETURN a AS a, r AS r, b AS b|}
      label label))
   session
 ```

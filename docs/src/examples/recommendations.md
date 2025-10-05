@@ -19,12 +19,25 @@ let bootstrap_data session label =
   (* Create items with tags *)
   let _ = Query_builder.execute_unit
     (Query_builder.raw (Printf.sprintf
-       "UNWIND [\n         {sku:'A', title:'Laptop', tags:['electronics','work']},\n         {sku:'B', title:'Mouse', tags:['electronics','accessory']},\n         {sku:'C', title:'Keyboard', tags:['electronics','accessory']},\n         {sku:'D', title:'Headphones', tags:['audio','accessory']},\n         {sku:'E', title:'Desk Lamp', tags:['home','light']}\n       ] AS x\n       MERGE (:Item:%s {sku: x.sku, title: x.title, tags: x.tags})"
+       {|UNWIND [
+         {sku:'A', title:'Laptop', tags:['electronics','work']},
+         {sku:'B', title:'Mouse', tags:['electronics','accessory']},
+         {sku:'C', title:'Keyboard', tags:['electronics','accessory']},
+         {sku:'D', title:'Headphones', tags:['audio','accessory']},
+         {sku:'E', title:'Desk Lamp', tags:['home','light']}
+       ] AS x
+       MERGE (:Item:%s {sku: x.sku, title: x.title, tags: x.tags})|}
        label)) session in
   (* Create users *)
   let _ = Query_builder.execute_unit
     (Query_builder.raw (Printf.sprintf
-       "UNWIND [\n         {u:'alice', n:'Alice'},\n         {u:'bob', n:'Bob'},\n         {u:'carol', n:'Carol'},\n         {u:'dave', n:'Dave'}\n       ] AS x\n       MERGE (:User:%s {username: x.u, name: x.n})"
+       {|UNWIND [
+         {u:'alice', n:'Alice'},
+         {u:'bob', n:'Bob'},
+         {u:'carol', n:'Carol'},
+         {u:'dave', n:'Dave'}
+       ] AS x
+       MERGE (:User:%s {username: x.u, name: x.n})|}
        label)) session in
   (* Purchases *)
   let mk u s =
@@ -49,12 +62,12 @@ Popularity‑based recommendations (items the user doesn’t own)
 let recommend_popular session label ~for_user ~limit =
   Query_builder.execute
     (Query_builder.raw (Printf.sprintf
-       "MATCH (me:User:%s {username:$u})\n\
-        MATCH (other:User:%s)-[:PURCHASED]->(i:Item:%s)\n\
-        WHERE other <> me AND NOT (me)-[:PURCHASED]->(i)\n\
-        RETURN i.sku AS sku, i.title AS title, count(*) AS score\n\
-        ORDER BY score DESC, title ASC\n\
-        LIMIT $k"
+       {|MATCH (me:User:%s {username:$u})
+        MATCH (other:User:%s)-[:PURCHASED]->(i:Item:%s)
+        WHERE other <> me AND NOT (me)-[:PURCHASED]->(i)
+        RETURN i.sku AS sku, i.title AS title, count(*) AS score
+        ORDER BY score DESC, title ASC
+        LIMIT $k|}
        label label label)
      |> Query_builder.with_params [
           ("u", Value.Text for_user);
@@ -68,13 +81,13 @@ Collaborative filtering (users with shared purchases)
 let recommend_similar_users session label ~for_user ~limit =
   Query_builder.execute
     (Query_builder.raw (Printf.sprintf
-       "MATCH (me:User:%s {username:$u})-[:PURCHASED]->(p:Item:%s)<-[:PURCHASED]-(other:User:%s)\n\
-        WITH me, other, count(DISTINCT p) AS overlap\n\
-        MATCH (other)-[:PURCHASED]->(rec:Item:%s)\n\
-        WHERE NOT (me)-[:PURCHASED]->(rec)\n\
-        RETURN rec.sku AS sku, rec.title AS title, sum(overlap) AS score\n\
-        ORDER BY score DESC, title ASC\n\
-        LIMIT $k"
+       {|MATCH (me:User:%s {username:$u})-[:PURCHASED]->(p:Item:%s)<-[:PURCHASED]-(other:User:%s)
+        WITH me, other, count(DISTINCT p) AS overlap
+        MATCH (other)-[:PURCHASED]->(rec:Item:%s)
+        WHERE NOT (me)-[:PURCHASED]->(rec)
+        RETURN rec.sku AS sku, rec.title AS title, sum(overlap) AS score
+        ORDER BY score DESC, title ASC
+        LIMIT $k|}
        label label label label)
      |> Query_builder.with_params [
           ("u", Value.Text for_user);
@@ -88,12 +101,12 @@ Content‑based (shared tags)
 let recommend_by_tags session label ~for_user ~limit =
   Query_builder.execute
     (Query_builder.raw (Printf.sprintf
-       "MATCH (me:User:%s {username:$u})-[:PURCHASED]->(p:Item:%s)\n\
-        MATCH (rec:Item:%s)\n\
-        WHERE NOT (me)-[:PURCHASED]->(rec) AND any(t IN p.tags WHERE t IN rec.tags)\n\
-        RETURN rec.sku AS sku, rec.title AS title, size([t IN p.tags WHERE t IN rec.tags]) AS score\n\
-        ORDER BY score DESC, title ASC\n\
-        LIMIT $k"
+       {|MATCH (me:User:%s {username:$u})-[:PURCHASED]->(p:Item:%s)
+        MATCH (rec:Item:%s)
+        WHERE NOT (me)-[:PURCHASED]->(rec) AND any(t IN p.tags WHERE t IN rec.tags)
+        RETURN rec.sku AS sku, rec.title AS title, size([t IN p.tags WHERE t IN rec.tags]) AS score
+        ORDER BY score DESC, title ASC
+        LIMIT $k|}
        label label label)
      |> Query_builder.with_params [
           ("u", Value.Text for_user);
