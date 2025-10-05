@@ -452,3 +452,218 @@ let find pred query =
 
 let find_map f query =
   map (fun xs -> List.find_map f xs) query
+
+(* Advanced transformation pipeline functions *)
+
+(* Flatten nested query results *)
+let flatten query =
+  map List.flatten query
+
+(* Map and flatten in one operation *)
+let flat_map f query =
+  map (List.concat_map f) query
+
+(* Reduce/aggregate operations *)
+let reduce f init query =
+  map (List.fold_left f init) query
+
+let sum_int query =
+  map (List.fold_left Int64.add 0L) query
+
+let sum_float query =
+  map (List.fold_left (+.) 0.0) query
+
+let average_int query =
+  map (fun xs ->
+    match xs with
+    | [] -> 0L
+    | _ ->
+        let sum = List.fold_left Int64.add 0L xs in
+        Int64.div sum (Int64.of_int (List.length xs))
+  ) query
+
+let average_float query =
+  map (fun xs ->
+    match xs with
+    | [] -> 0.0
+    | _ ->
+        let sum = List.fold_left (+.) 0.0 xs in
+        sum /. float_of_int (List.length xs)
+  ) query
+
+let min_by cmp query =
+  map (function
+    | [] -> None
+    | x :: xs -> Some (List.fold_left (fun acc y -> if cmp y acc < 0 then y else acc) x xs)
+  ) query
+
+let max_by cmp query =
+  map (function
+    | [] -> None
+    | x :: xs -> Some (List.fold_left (fun acc y -> if cmp y acc > 0 then y else acc) x xs)
+  ) query
+
+(* Sorting operations *)
+let sort cmp query =
+  map (List.sort cmp) query
+
+let sort_by f query =
+  map (List.sort (fun a b -> compare (f a) (f b))) query
+
+let reverse query =
+  map List.rev query
+
+(* Chunking and batching *)
+let chunk n query =
+  let rec chunk_list acc current count = function
+    | [] -> if current = [] then List.rev acc else List.rev (List.rev current :: acc)
+    | x :: xs ->
+        if count >= n then
+          chunk_list (List.rev current :: acc) [x] 1 xs
+        else
+          chunk_list acc (x :: current) (count + 1) xs
+  in
+  map (chunk_list [] [] 0) query
+
+let batch n query =
+  chunk n query
+
+(* Sliding window *)
+let sliding_window n query =
+  let rec windows acc xs =
+    if List.length xs < n then List.rev acc
+    else
+      let window = List.filteri (fun i _ -> i < n) xs in
+      let rest = List.tl xs in
+      windows (window :: acc) rest
+  in
+  map (windows []) query
+
+(* Deduplication with custom equality *)
+let deduplicate_by eq query =
+  map (fun xs ->
+    let rec dedup acc = function
+      | [] -> List.rev acc
+      | x :: rest ->
+          if List.exists (eq x) acc then dedup acc rest
+          else dedup (x :: acc) rest
+    in
+    dedup [] xs
+  ) query
+
+(* Split at predicate *)
+let span pred query =
+  map (fun xs ->
+    let rec span_list acc = function
+      | [] -> (List.rev acc, [])
+      | x :: rest as l ->
+          if pred x then span_list (x :: acc) rest
+          else (List.rev acc, l)
+    in
+    span_list [] xs
+  ) query
+
+let break_at pred query =
+  span (fun x -> not (pred x)) query
+
+(* Take/drop while *)
+let take_while pred query =
+  map (fun xs ->
+    let rec take acc = function
+      | [] -> List.rev acc
+      | x :: rest ->
+          if pred x then take (x :: acc) rest
+          else List.rev acc
+    in
+    take [] xs
+  ) query
+
+let drop_while pred query =
+  map (fun xs ->
+    let rec drop = function
+      | [] -> []
+      | x :: rest as l ->
+          if pred x then drop rest
+          else l
+    in
+    drop xs
+  ) query
+
+(* Nth element *)
+let nth n query =
+  map (fun xs ->
+    try Some (List.nth xs n)
+    with _ -> None
+  ) query
+
+(* Index operations *)
+let index_of eq x query =
+  map (fun xs ->
+    let rec find_index i = function
+      | [] -> None
+      | y :: rest ->
+          if eq x y then Some i
+          else find_index (i + 1) rest
+    in
+    find_index 0 xs
+  ) query
+
+let indexed query =
+  map (List.mapi (fun i x -> (i, x))) query
+
+(* Interleave two queries *)
+let interleave q1 q2 =
+  bind q1 (fun xs ->
+    bind q2 (fun ys ->
+      let rec interleave_lists acc xs ys =
+        match xs, ys with
+        | [], [] -> List.rev acc
+        | x :: xs', [] -> List.rev_append acc (x :: xs')
+        | [], y :: ys' -> List.rev_append acc (y :: ys')
+        | x :: xs', y :: ys' -> interleave_lists (y :: x :: acc) xs' ys'
+      in
+      Base {
+        statement = "";
+        parameters = [];
+        transform = (fun _ -> Ok (interleave_lists [] xs ys))
+      }
+    )
+  )
+
+(* Cons and snoc operations *)
+let cons x query =
+  map (fun xs -> x :: xs) query
+
+let snoc query x =
+  map (fun xs -> xs @ [x]) query
+
+(* Replicate element n times *)
+let replicate n query =
+  map (fun xs ->
+    List.concat (List.map (fun x -> List.init n (fun _ -> x)) xs)
+  ) query
+
+(* Unzip pairs *)
+let unzip query =
+  map (fun pairs ->
+    let rec unzip_list acc1 acc2 = function
+      | [] -> (List.rev acc1, List.rev acc2)
+      | (a, b) :: rest -> unzip_list (a :: acc1) (b :: acc2) rest
+    in
+    unzip_list [] [] pairs
+  ) query
+
+(* Transpose list of lists *)
+let transpose query =
+  map (fun matrix ->
+    if matrix = [] then []
+    else
+      let rec transpose_lists acc = function
+        | [] :: _ -> List.rev acc
+        | rows ->
+            let heads = List.map List.hd rows in
+            let tails = List.map List.tl rows in
+            transpose_lists (heads :: acc) tails
+      in
+      transpose_lists [] matrix
+  ) query

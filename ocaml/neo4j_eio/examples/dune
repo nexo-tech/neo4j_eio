@@ -52,3 +52,8 @@
  (name pipeline_operators)
  (modules pipeline_operators)
  (libraries neo4j_eio eio eio_main))
+
+(executable
+ (name transformations)
+ (modules transformations)
+ (libraries neo4j_eio eio eio_main))
