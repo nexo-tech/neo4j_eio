@@ -2,3 +2,8 @@
  (name simple_queries)
  (modules simple_queries)
  (libraries neo4j_eio eio eio_main))
+
+(executable
+ (name error_handling)
+ (modules error_handling)
+ (libraries neo4j_eio eio eio_main))
