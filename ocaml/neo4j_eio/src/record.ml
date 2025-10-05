@@ -116,6 +116,42 @@ let exact_path = function
   | Value.Path p -> Ok p
   | _ -> Error NotPath
 
+let exact_point2d = function
+  | Value.Point2D p -> Ok p
+  | _ -> Error NotPoint2D
+
+let exact_point3d = function
+  | Value.Point3D p -> Ok p
+  | _ -> Error NotPoint3D
+
+let exact_duration = function
+  | Value.Duration d -> Ok d
+  | _ -> Error NotDuration
+
+let exact_date = function
+  | Value.Date d -> Ok d
+  | _ -> Error NotDate
+
+let exact_local_time = function
+  | Value.LocalTime t -> Ok t
+  | _ -> Error NotLocalTime
+
+let exact_time = function
+  | Value.Time t -> Ok t
+  | _ -> Error NotTime
+
+let exact_local_datetime = function
+  | Value.LocalDateTime dt -> Ok dt
+  | _ -> Error NotLocalDateTime
+
+let exact_datetime_zone_id = function
+  | Value.DateTimeZoneId dt -> Ok dt
+  | _ -> Error NotDateTimeZoneId
+
+let exact_datetime_offset = function
+  | Value.DateTimeOffset dt -> Ok dt
+  | _ -> Error NotDateTimeOffset
+
 let exact_value v = Ok v
 
 (* Maybe variants - return None instead of Error *)
@@ -133,6 +169,15 @@ let maybe_exact_node v = match exact_node v with Ok x -> Some x | Error _ -> Non
 let maybe_exact_relationship v = match exact_relationship v with Ok x -> Some x | Error _ -> None
 let maybe_exact_unbound_relationship v = match exact_unbound_relationship v with Ok x -> Some x | Error _ -> None
 let maybe_exact_path v = match exact_path v with Ok x -> Some x | Error _ -> None
+let maybe_exact_point2d v = match exact_point2d v with Ok x -> Some x | Error _ -> None
+let maybe_exact_point3d v = match exact_point3d v with Ok x -> Some x | Error _ -> None
+let maybe_exact_duration v = match exact_duration v with Ok x -> Some x | Error _ -> None
+let maybe_exact_date v = match exact_date v with Ok x -> Some x | Error _ -> None
+let maybe_exact_local_time v = match exact_local_time v with Ok x -> Some x | Error _ -> None
+let maybe_exact_time v = match exact_time v with Ok x -> Some x | Error _ -> None
+let maybe_exact_local_datetime v = match exact_local_datetime v with Ok x -> Some x | Error _ -> None
+let maybe_exact_datetime_zone_id v = match exact_datetime_zone_id v with Ok x -> Some x | Error _ -> None
+let maybe_exact_datetime_offset v = match exact_datetime_offset v with Ok x -> Some x | Error _ -> None
 let maybe_exact_value v = match exact_value v with Ok x -> Some x | Error _ -> None
 
 (* Record field accessors - at variants *)
@@ -200,6 +245,51 @@ let at_unbound_relationship record key =
 let at_path record key =
   match Value.StringMap.find_opt key record with
   | Some v -> exact_path v
+  | None -> Error (KeyNotFound key)
+
+let at_point2d record key =
+  match Value.StringMap.find_opt key record with
+  | Some v -> exact_point2d v
+  | None -> Error (KeyNotFound key)
+
+let at_point3d record key =
+  match Value.StringMap.find_opt key record with
+  | Some v -> exact_point3d v
+  | None -> Error (KeyNotFound key)
+
+let at_duration record key =
+  match Value.StringMap.find_opt key record with
+  | Some v -> exact_duration v
+  | None -> Error (KeyNotFound key)
+
+let at_date record key =
+  match Value.StringMap.find_opt key record with
+  | Some v -> exact_date v
+  | None -> Error (KeyNotFound key)
+
+let at_local_time record key =
+  match Value.StringMap.find_opt key record with
+  | Some v -> exact_local_time v
+  | None -> Error (KeyNotFound key)
+
+let at_time record key =
+  match Value.StringMap.find_opt key record with
+  | Some v -> exact_time v
+  | None -> Error (KeyNotFound key)
+
+let at_local_datetime record key =
+  match Value.StringMap.find_opt key record with
+  | Some v -> exact_local_datetime v
+  | None -> Error (KeyNotFound key)
+
+let at_datetime_zone_id record key =
+  match Value.StringMap.find_opt key record with
+  | Some v -> exact_datetime_zone_id v
+  | None -> Error (KeyNotFound key)
+
+let at_datetime_offset record key =
+  match Value.StringMap.find_opt key record with
+  | Some v -> exact_datetime_offset v
   | None -> Error (KeyNotFound key)
 
 let at_value record key =
@@ -272,6 +362,51 @@ let maybe_at_unbound_relationship record key =
 let maybe_at_path record key =
   match Value.StringMap.find_opt key record with
   | Some v -> (match exact_path v with Ok x -> Ok (Some x) | Error e -> Error e)
+  | None -> Ok None
+
+let maybe_at_point2d record key =
+  match Value.StringMap.find_opt key record with
+  | Some v -> (match exact_point2d v with Ok x -> Ok (Some x) | Error e -> Error e)
+  | None -> Ok None
+
+let maybe_at_point3d record key =
+  match Value.StringMap.find_opt key record with
+  | Some v -> (match exact_point3d v with Ok x -> Ok (Some x) | Error e -> Error e)
+  | None -> Ok None
+
+let maybe_at_duration record key =
+  match Value.StringMap.find_opt key record with
+  | Some v -> (match exact_duration v with Ok x -> Ok (Some x) | Error e -> Error e)
+  | None -> Ok None
+
+let maybe_at_date record key =
+  match Value.StringMap.find_opt key record with
+  | Some v -> (match exact_date v with Ok x -> Ok (Some x) | Error e -> Error e)
+  | None -> Ok None
+
+let maybe_at_local_time record key =
+  match Value.StringMap.find_opt key record with
+  | Some v -> (match exact_local_time v with Ok x -> Ok (Some x) | Error e -> Error e)
+  | None -> Ok None
+
+let maybe_at_time record key =
+  match Value.StringMap.find_opt key record with
+  | Some v -> (match exact_time v with Ok x -> Ok (Some x) | Error e -> Error e)
+  | None -> Ok None
+
+let maybe_at_local_datetime record key =
+  match Value.StringMap.find_opt key record with
+  | Some v -> (match exact_local_datetime v with Ok x -> Ok (Some x) | Error e -> Error e)
+  | None -> Ok None
+
+let maybe_at_datetime_zone_id record key =
+  match Value.StringMap.find_opt key record with
+  | Some v -> (match exact_datetime_zone_id v with Ok x -> Ok (Some x) | Error e -> Error e)
+  | None -> Ok None
+
+let maybe_at_datetime_offset record key =
+  match Value.StringMap.find_opt key record with
+  | Some v -> (match exact_datetime_offset v with Ok x -> Ok (Some x) | Error e -> Error e)
   | None -> Ok None
 
 let maybe_at_value record key =

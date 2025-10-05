@@ -46,6 +46,15 @@ val exact_node : Value.value -> (Value.node, decode_error) result
 val exact_relationship : Value.value -> (Value.relationship, decode_error) result
 val exact_unbound_relationship : Value.value -> (Value.urelationship, decode_error) result
 val exact_path : Value.value -> (Value.path, decode_error) result
+val exact_point2d : Value.value -> (Value.point2d, decode_error) result
+val exact_point3d : Value.value -> (Value.point3d, decode_error) result
+val exact_duration : Value.value -> (Value.duration, decode_error) result
+val exact_date : Value.value -> (Value.date, decode_error) result
+val exact_local_time : Value.value -> (Value.local_time, decode_error) result
+val exact_time : Value.value -> (Value.time, decode_error) result
+val exact_local_datetime : Value.value -> (Value.local_datetime, decode_error) result
+val exact_datetime_zone_id : Value.value -> (Value.datetime_zone_id, decode_error) result
+val exact_datetime_offset : Value.value -> (Value.datetime_offset, decode_error) result
 val exact_value : Value.value -> (Value.value, decode_error) result
 
 (* Maybe variants return None instead of Error *)
@@ -62,6 +71,15 @@ val maybe_exact_node : Value.value -> Value.node option
 val maybe_exact_relationship : Value.value -> Value.relationship option
 val maybe_exact_unbound_relationship : Value.value -> Value.urelationship option
 val maybe_exact_path : Value.value -> Value.path option
+val maybe_exact_point2d : Value.value -> Value.point2d option
+val maybe_exact_point3d : Value.value -> Value.point3d option
+val maybe_exact_duration : Value.value -> Value.duration option
+val maybe_exact_date : Value.value -> Value.date option
+val maybe_exact_local_time : Value.value -> Value.local_time option
+val maybe_exact_time : Value.value -> Value.time option
+val maybe_exact_local_datetime : Value.value -> Value.local_datetime option
+val maybe_exact_datetime_zone_id : Value.value -> Value.datetime_zone_id option
+val maybe_exact_datetime_offset : Value.value -> Value.datetime_offset option
 val maybe_exact_value : Value.value -> Value.value option
 
 (* Record field accessors - at variants look up key then decode *)
@@ -79,6 +97,15 @@ val at_node : t -> string -> (Value.node, decode_error) result
 val at_relationship : t -> string -> (Value.relationship, decode_error) result
 val at_unbound_relationship : t -> string -> (Value.urelationship, decode_error) result
 val at_path : t -> string -> (Value.path, decode_error) result
+val at_point2d : t -> string -> (Value.point2d, decode_error) result
+val at_point3d : t -> string -> (Value.point3d, decode_error) result
+val at_duration : t -> string -> (Value.duration, decode_error) result
+val at_date : t -> string -> (Value.date, decode_error) result
+val at_local_time : t -> string -> (Value.local_time, decode_error) result
+val at_time : t -> string -> (Value.time, decode_error) result
+val at_local_datetime : t -> string -> (Value.local_datetime, decode_error) result
+val at_datetime_zone_id : t -> string -> (Value.datetime_zone_id, decode_error) result
+val at_datetime_offset : t -> string -> (Value.datetime_offset, decode_error) result
 val at_value : t -> string -> (Value.value, decode_error) result
 
 (* Maybe_at variants return None if key not found, or decode error on type mismatch *)
@@ -95,6 +122,15 @@ val maybe_at_node : t -> string -> (Value.node option, decode_error) result
 val maybe_at_relationship : t -> string -> (Value.relationship option, decode_error) result
 val maybe_at_unbound_relationship : t -> string -> (Value.urelationship option, decode_error) result
 val maybe_at_path : t -> string -> (Value.path option, decode_error) result
+val maybe_at_point2d : t -> string -> (Value.point2d option, decode_error) result
+val maybe_at_point3d : t -> string -> (Value.point3d option, decode_error) result
+val maybe_at_duration : t -> string -> (Value.duration option, decode_error) result
+val maybe_at_date : t -> string -> (Value.date option, decode_error) result
+val maybe_at_local_time : t -> string -> (Value.local_time option, decode_error) result
+val maybe_at_time : t -> string -> (Value.time option, decode_error) result
+val maybe_at_local_datetime : t -> string -> (Value.local_datetime option, decode_error) result
+val maybe_at_datetime_zone_id : t -> string -> (Value.datetime_zone_id option, decode_error) result
+val maybe_at_datetime_offset : t -> string -> (Value.datetime_offset option, decode_error) result
 val maybe_at_value : t -> string -> (Value.value option, decode_error) result
 
 (* Helper constructors *)
