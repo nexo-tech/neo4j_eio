@@ -32,3 +32,8 @@
  (name crud)
  (modules crud)
  (libraries neo4j_eio eio eio_main))
+
+(executable
+ (name traversal)
+ (modules traversal)
+ (libraries neo4j_eio eio eio_main))
