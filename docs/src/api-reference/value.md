@@ -1,0 +1,38 @@
+# Value Module Reference
+
+Defines PackStream/Neo4j value types and helpers used across the driver (see ocaml/src/value.mli).
+
+Types
+- module `StringMap : Map.S` with `key = string`
+- Temporal/spatial:
+  - `point2d = { srid:int64; x:float; y:float }`
+  - `point3d = { srid:int64; x:float; y:float; z:float }`
+  - `duration = { months:int64; days:int64; seconds:int64; nanoseconds:int64 }`
+  - `date = { days_since_epoch:int64 }`
+  - `local_time = { nanoseconds_since_midnight:int64 }`
+  - `time = { nanoseconds_since_midnight:int64; timezone_offset_seconds:int64 }`
+  - `local_datetime = { seconds_since_epoch:int64; nanoseconds:int64 }`
+  - `datetime_zone_id = { seconds_since_epoch:int64; nanoseconds:int64; timezone_id:string }`
+  - `datetime_offset = { seconds_since_epoch:int64; nanoseconds:int64; timezone_offset_seconds:int64 }`
+- Graph entities:
+  - `structure = { signature:int; fields:value list }`
+  - `node = { node_id:int64; labels:string list; props:value StringMap.t }`
+  - `relationship = { rel_id:int64; start_node_id:int64; end_node_id:int64; rel_type:string; rel_props:value StringMap.t }`
+  - `urelationship = { urel_id:int64; urel_type:string; urel_props:value StringMap.t }`
+  - `path = { path_nodes:node list; path_rels:urelationship list; path_seq:int list }`
+- Core `value` variants:
+  - `Null | Bool of bool | Int of int64 | Float of float | Text of string | Bytes of string`
+  - `List of value list | Map of value StringMap.t | Struct of structure`
+  - `Node of node | Relationship of relationship | UnboundRelationship of urelationship | Path of path`
+  - `Point2D of point2d | Point3D of point3d | Duration of duration`
+  - `Date of date | LocalTime of local_time | Time of time | LocalDateTime of local_datetime | DateTimeZoneId of datetime_zone_id | DateTimeOffset of datetime_offset`
+
+Pretty printers
+- `pp_*` for all exposed types (useful in logs/tests).
+
+Constructors
+- `null, bool, int, int32, int_of_int, float, text, bytes, list, map`
+
+Record alias and helper
+- `type record = value StringMap.t`
+- `at : record -> string -> value option` (raw lookup; prefer Record for typed decoding)

@@ -1,0 +1,19 @@
+# Testing Strategies
+
+The repository uses Alcotest with helper utilities; mirror these patterns in your code.
+
+Environment and setup
+- Bring up Neo4j via `docker compose up -d neo4j` (see docker-compose.yml).
+- Configure `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` (defaults align with compose).
+
+Helpers
+- Use patterns from `Test_helper`: `with_neo4j` to skip when DB unavailable; `require_neo4j` to fail fast.
+- Scope data using unique labels in tests (e.g., `Label_%d`) and `DETACH DELETE` on cleanup.
+
+Determinism
+- Avoid sleeps/timing assumptions; assert on actual query results.
+- Prefer wrapping mutating scenarios in transactions + rollback to leave DB clean.
+
+Structure
+- Keep query text and decoders close to assertions.
+- Use `Extract`/`Record` for precise decoding and helpful `pp_decode_error` messages.

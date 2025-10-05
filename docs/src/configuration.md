@@ -1,0 +1,80 @@
+# Configuration
+
+neo4j_eio reads configuration from environment variables or from an explicit `Config.t`. This page documents all options and their effect based on the actual Config module.
+
+Environment variables (Config.of_env)
+- `NEO4J_URI`: Full URI, e.g., `bolt://127.0.0.1:7687`. TLS variants `bolt+s://` and `neo4j+s://` enable TLS implicitly.
+- `NEO4J_HOST`, `NEO4J_PORT`: Used if `NEO4J_URI` is not set; defaults are host `127.0.0.1`, port `7687`.
+- `NEO4J_USER` or `NEO4J_USERNAME`: Username (default `neo4j`).
+- `NEO4J_PASSWORD`: Password (default `testpass`).
+- `NEO4J_FETCH_SIZE`: Integer fetch size per PULL chunk (default `1000`).
+- `NEO4J_USER_AGENT`: Driver user agent string (default `neo4j_eio/0.1.0`).
+- `NEO4J_LOG_LEVEL`: One of `debug|info|warn|error|silent` (default `info`).
+- `NEO4J_TLS`: TLS flag (not active in the current session connection path; keep unset).
+- `NEO4J_TLS_CA`: Path to a CA file (reserved for future TLS enablement).
+
+Defaults (Config.default)
+- URI `bolt://127.0.0.1:7687`
+- User `neo4j`, Password `testpass`
+- `fetch_size = 1000`
+- `user_agent = neo4j_eio/0.1.0`
+- `use_tls = false`, `tls_ca = None`
+- `log_level = Info`
+- `protocols = [5; 4; 3]` (Bolt negotiation order)
+
+Constructing a Config.t
+
+```ocaml
+let cfg = Config.make
+  ~uri:"bolt://localhost:7687"
+  ~user:"neo4j"
+  ~password:"testpass"
+  ~user_agent:"MyApp/1.0"
+  ~fetch_size:1000
+  ~use_tls:false
+  ~log_level:Config.Info
+  ~protocols:[5; 4; 3]
+  ()
+```
+
+Using environment configuration
+
+```ocaml
+let cfg = Config.of_env ()  (* reads env and falls back to defaults *)
+```
+
+URI parsing
+- `Config.parse_uri` accepts `bolt://host:port`, `neo4j://host:port`, TLS variants `bolt+s://...`, `neo4j+s://...`, and bare `host:port`.
+- If port is omitted, defaults to `7687`.
+- Note: current implementation connects to `127.0.0.1` (loopback) using the parsed port, ignoring the host field. Ensure a local Neo4j instance on the specified port.
+
+Fetch size and streaming
+- `fetch_size` controls how many records are requested per `PULL`.
+- For strict queries, the driver loops PULL requests until completion; for streaming, you can control batch size per `run_stream` call via `~fetch_size`.
+
+TLS guidance (current status)
+- TLS is not currently enabled in the session connection path; use `bolt://` and keep `NEO4J_TLS` unset.
+
+Example end-to-end setup
+
+```bash
+export NEO4J_URI=bolt://127.0.0.1:7687
+export NEO4J_USER=neo4j
+export NEO4J_PASSWORD=testpass
+export NEO4J_FETCH_SIZE=1000
+```
+
+Then in OCaml:
+
+```ocaml
+Eio_main.run @@ fun env ->
+  let cfg = Config.of_env () in
+  Eio.Switch.run @@ fun sw ->
+    match Session.with_session ~sw ~net:env#net cfg (fun session ->
+      Query_builder.execute
+        (Query_builder.raw "RETURN 1 AS ok") session
+    ) with
+    | Ok (Ok [r]) -> (match Record.at_int r "ok" with Ok 1L -> () | _ -> ())
+    | Ok (Error e) -> Printf.eprintf "Query failed: %s\n" (Error.to_string e)
+    | Error e -> Printf.eprintf "Session failed: %s\n" (Error.to_string e)
+```

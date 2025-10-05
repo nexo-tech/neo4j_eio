@@ -1,0 +1,46 @@
+# Basic Field Extractors
+
+The Extract module provides typed, composable field extractors over `Record.t`. Use it when you want clean, reusable decoding logic instead of manual `Record.at_*` calls.
+
+Core type
+- `'a Extract.t` — an extractor that reads a `Record.t` and returns `('a, Record.decode_error) result` via `Extract.run`.
+
+Simple extractors
+- Scalars: `text key`, `int key`, `int_as_int key`, `bool key`, `float key`, `bytes key`
+- Collections: `list key element_exact`, `map_field key`
+- Graph: `node key`, `relationship key`, `unbound_relationship key`, `path key`
+- Spatial/Temporal: `point2d key`, `point3d key`, `duration key`, `date key`, `local_time key`, `time key`, `local_datetime key`, `datetime_zone_id key`, `datetime_offset key`
+- Raw: `value key`
+
+Example
+```ocaml
+open Neo4j_eio
+open Extract
+
+let user_extractor =
+  let+ name = text "name"
+  and+ age = int "age" in
+  (name, age)
+
+match Query_builder.execute
+  (Query_builder.raw "RETURN 'Alice' AS name, 30 AS age") session with
+| Ok [r] -> (match Extract.run user_extractor r with Ok (n,a) -> Printf.printf "%s (%Ld)\n" n a | Error e -> Format.eprintf "%a\n" Record.pp_decode_error e)
+| _ -> ()
+```
+
+Optional fields
+- `maybe_*` extractors return `('a option, decode_error) result`, where `None` indicates a missing key; type mismatches are still errors.
+- `Extract.optional e` wraps any extractor. Current behavior: returns `Some x` on success and `None` only when the key is missing; a `Null` value produces a decode error via the underlying extractor.
+
+```ocaml
+let email_opt = maybe_text "email"
+```
+
+Running extractors
+- `Extract.run ex record : ('a, Record.decode_error) result`
+- `Extract.run_exn ex record` raises on failure (useful for tests).
+
+When to prefer Extract over Record.at_*
+- You want to assemble multiple fields declaratively with clear typing.
+- You want to reuse decoders across queries.
+- You want to build larger structures incrementally (see Applicative Extraction).

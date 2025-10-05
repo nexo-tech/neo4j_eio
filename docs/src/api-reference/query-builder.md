@@ -1,0 +1,40 @@
+# Query_builder Module Reference
+
+Fluent DSL for building Cypher queries (see ocaml/src/query_builder.mli).
+
+Core
+- `type t` — builder accumulator
+
+Construction
+- `raw : string -> t`
+- `match_ : string -> t`, `optional_match : string -> t`
+- `create_node : string -> t`, `merge : string -> t`, `unwind : string -> string -> t`
+
+Filtering
+- `where : string -> t -> t`, `and_where : string -> t -> t`, `or_where : string -> t -> t`
+
+Projection
+- `return : string list -> t -> t`, `return_distinct : string list -> t -> t`, `with_ : string list -> t -> t`
+
+Ordering/Limiting
+- `order_by : string -> t -> t`, `order_by_desc : string -> t -> t`
+- `limit : int -> t -> t`, `skip : int -> t -> t`
+
+Mutations
+- `create : string -> t -> t`, `set : string list -> t -> t`
+- `delete : string list -> t -> t`, `detach_delete : string list -> t -> t`
+
+Parameters
+- `with_params : (string * Value.value) list -> t -> t`
+- `with_param : string * Value.value -> t -> t`
+
+Build/Execute
+- `build : t -> string`, `build_with_params : t -> string * (string * Value.value) list`, `to_string`
+- `execute : t -> Session.t -> (Record.t list, Error.t) result`
+- `execute_unit : t -> Session.t -> (unit, Error.t) result`
+
+Convenience
+- `select : string list -> string -> t` (alias for `match_`)
+- `insert : string -> (string * Value.value) list -> t`
+- `update : string -> string list -> t`
+- `remove : string -> t`

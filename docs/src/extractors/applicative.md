@@ -1,0 +1,44 @@
+# Applicative Extraction
+
+Build rich decoders by composing basic extractors with `let+` (map) and `and+` (applicative product). These operators are defined in `Extract` and used throughout the codebase and tests.
+
+Why applicative?
+- Concise: declare what you need (`name`, `age`, `email`) and get a typed structure
+- Composable: reuse pieces across queries
+
+Example: decode to a record type
+```ocaml
+open Neo4j_eio
+open Extract
+
+type person = { name: string; age: int64; email: string option }
+
+let person_extractor =
+  let+ name = text "name"
+  and+ age = int "age"
+  and+ email = maybe_text "email" in
+  { name; age; email }
+
+match Query_builder.execute
+  (Query_builder.raw "RETURN 'Alice' AS name, 30 AS age, null AS email") session with
+| Ok [r] -> (match Extract.run person_extractor r with
+            | Ok p -> Printf.printf "%s (%Ld) email=%s\n" p.name p.age (Option.value ~default:"-" p.email)
+            | Error e -> Format.eprintf "%a\n" Record.pp_decode_error e)
+| _ -> ()
+```
+
+Combine independent results
+```ocaml
+let extractor =
+  let+ a = int "a"
+  and+ b = int "b" in
+  Int64.add a b
+```
+
+Lists and nested structures
+- Use `list key element_exact` to decode lists, e.g., `list "tags" Record.exact_text`
+- Combine with applicative style to build complex trees
+
+Execution helpers
+- `Extract.run` and `Extract.run_exn`
+- Pair with `Cypher.extract` pipeline support via `Cypher.extract extractor query` when using the fluent API

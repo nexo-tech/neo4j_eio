@@ -1,0 +1,135 @@
+# Social Network Example
+
+This example models a small social network and demonstrates practical queries for recommendations, mutual friends, and paths between users using the current API.
+
+Core entities and relationships
+- Nodes: `(:User {username, name})`
+- Relationships: `(:User)-[:FRIEND_WITH]->(:User)` (stored in both directions for symmetry)
+
+Utilities
+- Uses Query Builder (`Query_builder.raw`, `with_params`, `execute`, `execute_unit`)
+- Uses Record decoders (`Record.at_text`, `Record.at_int`, `Record.at_list Record.exact_text`)
+- Optional: Transaction DSL for multi-step initialization
+
+Bootstrap sample graph
+```ocaml
+open Neo4j_eio
+
+let bootstrap_graph session label =
+  (* Create users *)
+  let _ = Query_builder.execute_unit
+    (Query_builder.raw (Printf.sprintf
+       "UNWIND [\n         {u:'alice', n:'Alice'},\n         {u:'bob', n:'Bob'},\n         {u:'carol', n:'Carol'},\n         {u:'dave', n:'Dave'},\n         {u:'erin', n:'Erin'}\n       ] AS x\n       MERGE (:User:%s {username: x.u, name: x.n})"
+       label))
+    session in
+  (* Friendships (bidirectional) *)
+  let mk a b =
+    Query_builder.raw (Printf.sprintf
+      "MATCH (a:User:%s {username: $a}), (b:User:%s {username: $b})\nMERGE (a)-[:FRIEND_WITH]->(b)\nMERGE (b)-[:FRIEND_WITH]->(a)"
+      label label)
+    |> Query_builder.with_params [("a", Value.Text a); ("b", Value.Text b)]
+  in
+  let _ = Query_builder.execute_unit (mk "alice" "bob") session in
+  let _ = Query_builder.execute_unit (mk "alice" "carol") session in
+  let _ = Query_builder.execute_unit (mk "bob" "dave") session in
+  let _ = Query_builder.execute_unit (mk "carol" "erin") session in
+  Ok ()
+```
+
+Friend recommendations (friends-of-friends not already friends)
+```ocaml
+let recommend_friends session label ~for_user ~limit =
+  Query_builder.execute
+    (Query_builder.raw (Printf.sprintf
+       "MATCH (me:User:%s {username: $u})-[:FRIEND_WITH]->(:User)-[:FRIEND_WITH]->(cand:User:%s)\n\
+        WHERE cand <> me AND NOT (me)-[:FRIEND_WITH]->(cand)\n\
+        RETURN cand.username AS user, count(*) AS score\n\
+        ORDER BY score DESC, user ASC\n\
+        LIMIT $k"
+       label label)
+     |> Query_builder.with_params [
+          ("u", Value.Text for_user);
+          ("k", Value.Int (Int64.of_int limit));
+        ])
+    session
+```
+
+Mutual friends between two users
+```ocaml
+let mutual_friends session label ~a ~b =
+  Query_builder.execute
+    (Query_builder.raw (Printf.sprintf
+       "MATCH (a:User:%s {username: $a})-[:FRIEND_WITH]->(f:User:%s)<-[:FRIEND_WITH]-(b:User:%s {username: $b})\n\
+        RETURN f.username AS user\n\
+        ORDER BY user"
+       label label label)
+     |> Query_builder.with_params [ ("a", Value.Text a); ("b", Value.Text b) ])
+    session
+```
+
+Shortest social path (degrees of separation)
+```ocaml
+let degrees_of_separation session label ~a ~b =
+  Query_builder.execute
+    (Query_builder.raw (Printf.sprintf
+       "MATCH (a:User:%s {username: $a}), (b:User:%s {username: $b}),\n\
+        p = shortestPath((a)-[:FRIEND_WITH*]-(b))\n\
+        RETURN [n IN nodes(p) | n.username] AS path, length(p) AS hops"
+       label label)
+     |> Query_builder.with_params [ ("a", Value.Text a); ("b", Value.Text b) ])
+    session
+```
+
+Putting it together
+```ocaml
+let () =
+  Eio_main.run @@ fun env ->
+    let cfg = Config.of_env () in
+    Eio.Switch.run @@ fun sw ->
+      match Session.with_session ~sw ~net:env#net cfg (fun session ->
+        let label = Printf.sprintf "SN_%d" (Random.int 1_000_000) in
+        let _ = bootstrap_graph session label in
+
+        (* Friend recommendations for Alice *)
+        (match recommend_friends session label ~for_user:"alice" ~limit:5 with
+         | Ok recs ->
+             Printf.printf "Recommendations for @alice:\n";
+             List.iter (fun r ->
+               match Record.at_text r "user", Record.at_int r "score" with
+               | Ok u, Ok s -> Printf.printf "  %s (score %Ld)\n" u s
+               | _ -> ()
+             ) recs
+         | Error e -> Printf.eprintf "Recommend failed: %s\n" (Error.to_string e));
+
+        (* Mutual friends between Bob and Carol *)
+        (match mutual_friends session label ~a:"bob" ~b:"carol" with
+         | Ok rows ->
+             Printf.printf "Mutual friends between @bob and @carol:\n";
+             List.iter (fun r -> match Record.at_text r "user" with Ok u -> Printf.printf "  %s\n" u | _ -> ()) rows
+         | Error e -> Printf.eprintf "Mutual failed: %s\n" (Error.to_string e));
+
+        (* Degrees of separation from Alice to Erin *)
+        (match degrees_of_separation session label ~a:"alice" ~b:"erin" with
+         | Ok [r] ->
+             (match Record.at_list Record.exact_text r "path", Record.at_int r "hops" with
+              | Ok path, Ok hops ->
+                  Printf.printf "Path (@alice -> @erin), %Ld hops: %s\n"
+                    hops (String.concat " -> " path)
+              | _ -> Printf.printf "Decode error\n")
+         | Ok _ -> Printf.printf "No path found\n"
+         | Error e -> Printf.eprintf "Path failed: %s\n" (Error.to_string e));
+
+        (* Cleanup *)
+        let _ = Query_builder.execute_unit
+          (Query_builder.raw (Printf.sprintf "MATCH (n:%s) DETACH DELETE n" label))
+          session in
+        Ok ()
+      ) with
+      | Ok () -> ()
+      | Error e -> Printf.eprintf "Session error: %s\n" (Error.to_string e)
+```
+
+Notes
+- Store `FRIEND_WITH` both ways (two directed relationships) for simple undirected semantics in Cypher.
+- Use label-scoped data (e.g., `:%s`) to keep examples isolated and cleanup easy.
+- Always alias projected fields (e.g., `AS user`, `AS score`) for stable decoding keys.

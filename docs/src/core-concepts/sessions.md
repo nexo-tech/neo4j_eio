@@ -1,0 +1,66 @@
+# Sessions and Connections
+
+This page explains how sessions work, how connections are established, and how concurrency, streaming, and transactions interact. Content reflects the current implementation in `ocaml/src/session.ml` and `ocaml/src/connection.ml`.
+
+Session basics
+- Create a session with `Session.with_session ~sw ~net cfg (fun session -> ...)`.
+- A session encapsulates a single Bolt connection and serializes requests using a mutex; only one request is in flight at a time.
+- Close behavior is automatic with `with_session`: the driver sends `GOODBYE` and closes the flow.
+
+Connection lifecycle
+- Handshake: proposes Bolt versions `[5;4;3;2]` and selects the server’s highest common version.
+- Authentication: sends `HELLO` with `user`, `password`, and `user_agent`.
+- Goodbye: on close, sends `GOODBYE`.
+- Important current limitation:
+  - Hostname in `NEO4J_URI` is ignored and connections target `127.0.0.1` (loopback) with the specified port. Use a local Neo4j instance (e.g., the provided Docker Compose).
+  - TLS is not enabled for normal connections; `Config.use_tls = true` is not supported yet (see notes below).
+
+Concurrency model
+- A session serializes all operations; use multiple sessions for concurrent queries.
+
+```ocaml
+Eio.Switch.run @@ fun sw ->
+  Eio.Fiber.both
+    (fun () -> Session.with_session ~sw ~net cfg (fun s ->
+       ignore (Query_builder.execute (Query_builder.raw "RETURN 1 AS n") s); Ok ()))
+    (fun () -> Session.with_session ~sw ~net cfg (fun s ->
+       ignore (Query_builder.execute (Query_builder.raw "RETURN 2 AS n") s); Ok ()))
+```
+
+Strict queries vs streaming
+- Strict: `Session.run` materializes all rows. It optionally accepts `~fetch_size` but still loops until completion.
+  - Example: `Session.run session ~statement:"RETURN 1 AS n" ()` returns `Value.value list` rows.
+- Streaming values: `Session.run_stream` returns a stream with `fetch_next()` and `exhausted`.
+- Streaming records: `Session.run_stream_records` returns a record stream where field names are preserved.
+- To collect a stream: `Session.stream_to_list` or `Session.record_stream_to_list`.
+
+```ocaml
+match Session.run_stream_records session ~statement:"UNWIND range(1,20) AS n RETURN n" ~fetch_size:5L () with
+| Error e -> Printf.eprintf "Error: %s\n" (Error.to_string e)
+| Ok s ->
+    let rec loop () =
+      if s.exhausted then () else
+      match s.fetch_next_records () with
+      | Error e -> Printf.eprintf "Fetch error: %s\n" (Error.to_string e)
+      | Ok chunk -> Printf.printf "Chunk size %d\n" (List.length chunk); loop ()
+    in loop ()
+```
+
+Transactions and error handling
+- Begin/commit/rollback via `Session.begin_transaction`, `Session.commit`, `Session.rollback`.
+- Convenience: `Session.transact session (fun s -> (* ...return ('a, Error.t) result ... *))` commits on success and rolls back on error.
+- On server `FAILURE` outside a transaction, the driver automatically issues a `RESET` to recover; inside a transaction, errors do not auto-reset until rollback.
+
+Resets and failed state
+- `Session.reset` clears the failed state (e.g., after a `FAILURE`) and resets `in_transaction` to `false`.
+- `Session.run`/streaming paths will auto-reset after failures when not in a transaction.
+
+TLS (current status)
+- The `Config` type exposes TLS options, but normal connection path is currently non-TLS and requires `use_tls = false`.
+- Avoid `bolt+s://` URIs or `NEO4J_TLS=1` for now; support is planned but not active in the session path.
+
+Practical tips
+- Prefer record streams when you need field names for decoding via `Record` helpers.
+- Use label-scoped test data and `DETACH DELETE` for cleanup in examples/tests.
+- For parallel work, create multiple sessions under the same `Eio.Switch`.
+

@@ -1,0 +1,137 @@
+# Graph Analytics Example
+
+This example demonstrates simple graph analytics using Cypher aggregations with the current neo4j_eio API. We avoid external algorithm plugins and focus on measures you can compute directly in Cypher for small graphs.
+
+Scenario
+- Directed follow graph: `(:User {username, name})` with `(:User)-[:FOLLOWS]->(:User)`
+
+APIs used
+- Query Builder: `Query_builder.raw`, `with_params`, `execute`, `execute_unit`
+- Record decoding: `Record.at_text`, `Record.at_int`, `Record.at_float`
+- Optional pipeline post‑processing via `Cypher`
+
+Bootstrap a sample network
+```ocaml
+open Neo4j_eio
+
+let bootstrap_network session label =
+  (* Users *)
+  let _ = Query_builder.execute_unit
+    (Query_builder.raw (Printf.sprintf
+       "UNWIND [\n         {u:'alice', n:'Alice'},\n         {u:'bob',   n:'Bob'},\n         {u:'carol', n:'Carol'},\n         {u:'dave',  n:'Dave'},\n         {u:'erin',  n:'Erin'}\n       ] AS x MERGE (:User:%s {username:x.u, name:x.n})"
+       label)) session in
+  (* FOLLOWS edges (directed) *)
+  let mk a b =
+    Query_builder.raw (Printf.sprintf
+      "MATCH (a:User:%s {username:$a}),(b:User:%s {username:$b}) MERGE (a)-[:FOLLOWS]->(b)"
+      label label)
+    |> Query_builder.with_params [("a", Value.Text a); ("b", Value.Text b)]
+  in
+  let _ = Query_builder.execute_unit (mk "alice" "bob")   session in
+  let _ = Query_builder.execute_unit (mk "alice" "carol") session in
+  let _ = Query_builder.execute_unit (mk "bob"   "carol") session in
+  let _ = Query_builder.execute_unit (mk "carol" "dave")  session in
+  let _ = Query_builder.execute_unit (mk "dave"  "erin")  session in
+  let _ = Query_builder.execute_unit (mk "bob"   "dave")  session in
+  Ok ()
+```
+
+Out‑degree and in‑degree (degree centrality)
+```ocaml
+let out_degree session label =
+  Query_builder.execute
+    (Query_builder.raw (Printf.sprintf
+       "MATCH (u:User:%s)-[:FOLLOWS]->() RETURN u.username AS user, count(*) AS outdeg ORDER BY outdeg DESC, user"
+       label)) session
+
+let in_degree session label =
+  Query_builder.execute
+    (Query_builder.raw (Printf.sprintf
+       "MATCH ()-[:FOLLOWS]->(u:User:%s) RETURN u.username AS user, count(*) AS indeg ORDER BY indeg DESC, user"
+       label)) session
+```
+
+Triangle count (closed triads initiated by user)
+```ocaml
+let triangle_count session label =
+  Query_builder.execute
+    (Query_builder.raw (Printf.sprintf
+       "MATCH (u:User:%s)-[:FOLLOWS]->(v:User:%s), (u)-[:FOLLOWS]->(w:User:%s), (v)-[:FOLLOWS]->(w)\n\
+        RETURN u.username AS user, count(DISTINCT w) AS triangles\n\
+        ORDER BY triangles DESC, user"
+       label label label)) session
+```
+
+Local clustering coefficient (per‑user)
+```ocaml
+let clustering_coefficient session label =
+  Query_builder.execute
+    (Query_builder.raw (Printf.sprintf
+       "MATCH (u:User:%s)-[:FOLLOWS]->(nbr:User:%s)\n\
+        WITH u, collect(DISTINCT nbr) AS N\n\
+        WITH u, N, size(N) AS n\n\
+        UNWIND N AS a\n\
+        UNWIND N AS b\n\
+        WITH u, n, a, b WHERE id(a) < id(b)\n\
+        MATCH (a)-[:FOLLOWS]->(b)\n\
+        WITH u, n, count(*) AS links\n\
+        RETURN u.username AS user,\n\
+               CASE WHEN n < 2 THEN 0.0 ELSE toFloat(2*links)/toFloat(n*(n-1)) END AS clustering\n\
+        ORDER BY clustering DESC, user"
+       label label)) session
+```
+
+Putting it together
+```ocaml
+let () =
+  Eio_main.run @@ fun env ->
+    let cfg = Config.of_env () in
+    Eio.Switch.run @@ fun sw ->
+      match Session.with_session ~sw ~net:env#net cfg (fun session ->
+        let label = Printf.sprintf "AN_%d" (Random.int 1_000_000) in
+        let _ = bootstrap_network session label in
+
+        let show_deg title rows field =
+          Printf.printf "%s\n" title;
+          List.iter (fun r ->
+            match Record.at_text r "user", Record.at_int r field with
+            | Ok u, Ok d -> Printf.printf "  %s: %Ld\n" u d | _ -> ()
+          ) rows in
+
+        let show_float title rows field =
+          Printf.printf "%s\n" title;
+          List.iter (fun r ->
+            match Record.at_text r "user", Record.at_float r field with
+            | Ok u, Ok x -> Printf.printf "  %s: %.4f\n" u x | _ -> ()
+          ) rows in
+
+        (match out_degree session label with
+         | Ok rows -> show_deg "Out-degree:" rows "outdeg"
+         | Error e -> Printf.eprintf "outdeg failed: %s\n" (Error.to_string e));
+
+        (match in_degree session label with
+         | Ok rows -> show_deg "In-degree:" rows "indeg"
+         | Error e -> Printf.eprintf "indeg failed: %s\n" (Error.to_string e));
+
+        (match triangle_count session label with
+         | Ok rows -> show_deg "Triangles (u -> v,w where v->w):" rows "triangles"
+         | Error e -> Printf.eprintf "triangles failed: %s\n" (Error.to_string e));
+
+        (match clustering_coefficient session label with
+         | Ok rows -> show_float "Clustering coefficient:" rows "clustering"
+         | Error e -> Printf.eprintf "clustering failed: %s\n" (Error.to_string e));
+
+        (* Cleanup *)
+        let _ = Query_builder.execute_unit
+          (Query_builder.raw (Printf.sprintf "MATCH (n:%s) DETACH DELETE n" label))
+          session in
+        Ok ()
+      ) with
+      | Ok () -> ()
+      | Error e -> Printf.eprintf "Session error: %s\n" (Error.to_string e)
+```
+
+Tips
+- For undirected analytics, insert edges in both directions or adapt queries to treat directions symmetrically.
+- Use label scoping (e.g., `:AN_123`) for isolation and cleanup in examples.
+- For large graphs, consider streaming reads and applying `Cypher` transformations on batches.

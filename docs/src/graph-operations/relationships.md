@@ -1,0 +1,68 @@
+# Working With Relationships
+
+This guide covers creating, querying, and decoding relationships, including relationship properties and endpoints. Examples use the current API.
+
+Create relationships
+```ocaml
+let label = Printf.sprintf "User_%d" (Random.int 1_000_000) in
+let res = Query_builder.execute
+  (Query_builder.raw (Printf.sprintf
+     "CREATE (a:%s {name: 'Alice'})-[r:KNOWS {since: 2020}]->(b:%s {name: 'Bob'})\nRETURN a AS a, r AS r, b AS b"
+     label label))
+  session
+```
+
+Decode relationships with Record
+```ocaml
+match res with
+| Ok [r] ->
+    (match Record.at_relationship r "r", Record.at_node r "a", Record.at_node r "b" with
+     | Ok rel, Ok a, Ok b ->
+         Printf.printf "rel id=%Ld type=%s start=%Ld end=%Ld since=%Ld\n"
+           rel.rel_id rel.rel_type rel.start_node_id rel.end_node_id
+           (match Value.StringMap.find_opt "since" rel.rel_props with Some (Value.Int n) -> n | _ -> 0L);
+         Printf.printf "a=%s, b=%s\n"
+           (match Value.StringMap.find_opt "name" a.props with Some (Value.Text s) -> s | _ -> "")
+           (match Value.StringMap.find_opt "name" b.props with Some (Value.Text s) -> s | _ -> "")
+     | _ -> ())
+| _ -> ()
+```
+
+Decode relationships with Extract
+```ocaml
+open Extract
+let rel_info =
+  let+ rel = relationship "r" in
+  (rel.rel_id, rel.rel_type, rel.start_node_id, rel.end_node_id, rel.rel_props)
+```
+
+Relationship property updates
+```ocaml
+let _ = Query_builder.execute
+  (Query_builder.raw (Printf.sprintf
+     "MATCH (:%s {name:'Alice'})-[r:KNOWS]->(:%s {name:'Bob'}) SET r.since = $y RETURN r.since AS since"
+     label label)
+   |> Query_builder.with_param ("y", Value.Int 2021L))
+  session
+```
+
+Lens helpers for relationships
+```ocaml
+open Lens
+let show_rel rel =
+  match rel ^. rel_type with
+  | Some t -> Printf.printf "type=%s\n" t
+  | None -> ()
+```
+
+Delete relationships
+```ocaml
+let _ = Query_builder.execute
+  (Query_builder.raw (Printf.sprintf "MATCH ()-[r:KNOWS]->() DELETE r RETURN 1"))
+  session
+```
+
+Tips
+- Return relationship values explicitly (e.g., `r AS r`) to decode them by key.
+- Use `Record.at_relationship`/`Extract.relationship` to get typed access to `rel_type`, `rel_id`, `start_node_id`, `end_node_id`, and `rel_props`.
+- Keep node cleanup idempotent by `DETACH DELETE` on labels.

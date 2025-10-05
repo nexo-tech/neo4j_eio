@@ -1,0 +1,53 @@
+# Query Transformations
+
+This page catalogs the transformation operators available on `Cypher.t` pipelines, reflecting the current implementation in `ocaml/src/cypher.ml` and examples under `ocaml/examples/transformations.ml` and `pipeline_operators.ml`.
+
+Result shaping
+- `extract extractor` — decode `Record.t list` to typed values via `Extract`
+- `single` — `Ok None` or `Ok (Some x)` when 0/1 results; error if >1
+- `expect_one` — `Ok x` on exactly 1 result; error otherwise
+- `first`/`head` — `Ok None` or `Ok (Some x)` for the first element
+- `take n` — first `n` results
+
+Mapping and filtering
+- `map f` — apply `f` to the result list or value
+- `filter pred` — filter the result list
+- `concat_map f`, `flat_map f` — map then flatten nested lists
+
+Folds and aggregations
+- `fold_left f init`, `fold_right f init` — folds
+- `reduce f init` — left fold
+- `count`, `exists`, `for_all`, `find`, `find_map` — queries on lists
+- `sum_int`, `sum_float`, `average_int`, `average_float` — numeric aggregates
+- `min_by cmp`, `max_by cmp` — extremum by comparator
+
+Sorting and batching
+- `sort cmp`, `sort_by f`, `reverse`
+- `chunk n` (aka `batch n`) — split into sublists of size `n`
+- `sliding_window n` — moving windows over the list
+
+Set‑like ops and partitioning
+- `distinct` — remove duplicates (structural equality)
+- `deduplicate_by eq` — deduplicate with custom equality
+- `partition pred` — split into `(yes, no)`
+- `group_by key_fn` — group into `(key * values) list`
+- `span pred`, `break_at pred` — prefix/suffix split by predicate
+- `take_while pred`, `drop_while pred`
+
+Error handling and control
+- `or_else default` — convert error into `Ok default`
+- `catch handler` / `recover f` — map an error into a value
+- `when_ok pred f` / `unless_ok pred f` — conditional continuation
+
+Sequencing
+- `sequence [q1; q2; ...]` — collect results from many pipelines
+- `sequence_unit [...]` — ignore results, sequence for side‑effects
+
+Execution
+- `run_in session q` / `execute session q` — returns `('a, Error.t) result`
+- `run_in_exn` / `execute_exn` — exception variants
+- Operator: `q |>> session`
+
+Examples
+- See `ocaml/examples/transformations.ml` for aggregations (sum/avg/min/max), sorting/reversing, chunking, take/drop while, indexing, dedup, span/break, sliding windows, complex pipelines, and reduce.
+- See `ocaml/examples/pipeline_operators.ml` for `|>>`, `execute`, `run_in_exn`, and combined transformations.

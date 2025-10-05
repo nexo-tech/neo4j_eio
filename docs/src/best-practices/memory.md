@@ -1,0 +1,19 @@
+# Memory Management with Eio
+
+How to keep memory under control using the current Eio-based APIs.
+
+Streaming
+- Use `run_stream`/`run_stream_records` for large result sets; fetch in chunks (`~fetch_size`).
+- Process each chunk before fetching next; use `chunk`/`batch` in pipelines to bound intermediate sizes.
+
+Avoid unnecessary materialization
+- Prefer server-side aggregation and projection.
+- Avoid `stream_to_list`/`record_stream_to_list` unless required.
+
+Resource lifetimes
+- Wrap work in `Session.with_session ~sw ~net cfg (fun s -> ...)` to ensure `GOODBYE` and flow close.
+- Use `Eio.Switch` to scope fibers and ensure deterministic cleanup on failure.
+
+Data shapes
+- Return only needed fields; reduce per-row maps and strings.
+- Use typed extraction (`Record`/`Extract`) once and pass typed values onward.

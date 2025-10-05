@@ -1,0 +1,43 @@
+# Concurrent Sessions with Eio
+
+neo4j_eio serializes requests within a single `Session` using an internal mutex. For parallel query execution, create multiple sessions and run them in separate fibers. This page reflects the behavior tested in `ocaml/test/session_concurrency_test.ml`.
+
+Principles
+- One in‑flight request per session. The driver guards request/response cycles with a mutex.
+- To run queries concurrently, create multiple sessions under the same `Eio.Switch`.
+- Inside a single session, sequential calls are safe across fibers but will be serialized.
+
+Basic concurrency pattern
+```ocaml
+open Neo4j_eio
+
+Eio_main.run @@ fun env ->
+  let cfg = Config.of_env () in
+  Eio.Switch.run @@ fun sw ->
+    Eio.Fiber.both
+      (fun () ->
+         ignore (Session.with_session ~sw ~net:env#net cfg (fun s ->
+           ignore (Query_builder.execute (Query_builder.raw "RETURN 1 AS n") s);
+           Ok ())));
+      (fun () ->
+         ignore (Session.with_session ~sw ~net:env#net cfg (fun s ->
+           ignore (Query_builder.execute (Query_builder.raw "RETURN 2 AS n") s);
+           Ok ())));
+```
+
+Shared session, serialized
+```ocaml
+Eio.Switch.run @@ fun sw ->
+  let _ = Session.with_session ~sw ~net:env#net cfg (fun s ->
+    Eio.Fiber.both
+      (fun () -> ignore (Session.run s ~statement:"RETURN 1 AS n" ()))
+      (fun () -> ignore (Session.run s ~statement:"RETURN 2 AS n" ())); Ok ()) in
+  ()  (* Queries run one after the other within the same session *)
+```
+
+Tips
+- Use one session per concurrent task for best throughput.
+- Keep transactions short to reduce contention on a shared session.
+- For large reads, prefer streaming (`run_stream(_records)`) and tune `~fetch_size` to reduce time holding the session.
+- If you need high parallelism, consider a simple pool (see Pooling) and size it according to workload.
+

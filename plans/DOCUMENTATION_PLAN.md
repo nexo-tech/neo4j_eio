@@ -5,86 +5,96 @@ This document outlines the plan for creating comprehensive user documentation fo
 ## Master Checklist
 
 ### Phase 1 — Getting Started
-- [ ] Task 1.1: Introduction and overview page
-- [ ] Task 1.2: Installation and setup guide
-- [ ] Task 1.3: Quick start tutorial (first query)
-- [ ] Task 1.4: Configuration guide (environment variables, Config module)
+- [x] Task 1.1: Introduction and overview page
+- [x] Task 1.2: Installation and setup guide
+- [x] Task 1.3: Quick start tutorial (first query)
+- [x] Task 1.4: Configuration guide (environment variables, Config module)
 
 ### Phase 2 — Core Concepts
-- [ ] Task 2.1: Understanding sessions and connections
-- [ ] Task 2.2: Query execution basics
-- [ ] Task 2.3: Working with values (PackStream types)
-- [ ] Task 2.4: Record extraction and decoding
-- [ ] Task 2.5: Error handling patterns
+- [x] Task 2.1: Understanding sessions and connections
+- [x] Task 2.2: Query execution basics
+- [x] Task 2.3: Working with values (PackStream types)
+- [x] Task 2.4: Record extraction and decoding
+- [x] Task 2.5: Error handling patterns
 
 ### Phase 3 — Query Building
-- [ ] Task 3.1: Query_builder DSL guide
-- [ ] Task 3.2: Parameter binding and safety
-- [ ] Task 3.3: Building queries programmatically
-- [ ] Task 3.4: Common query patterns (CRUD operations)
+- [x] Task 3.1: Query_builder DSL guide
+- [x] Task 3.2: Parameter binding and safety
+- [x] Task 3.3: Building queries programmatically
+- [x] Task 3.4: Common query patterns (CRUD operations)
 
 ### Phase 4 — Advanced Features
-- [ ] Task 4.1: Transaction management
-- [ ] Task 4.2: Transaction DSL guide
-- [ ] Task 4.3: Streaming queries for large result sets
+- [x] Task 4.1: Transaction management
+- [x] Task 4.2: Transaction DSL guide
+- [x] Task 4.3: Streaming queries for large result sets
+- [x] Task 4.4: Concurrent sessions with Eio
+- [x] Task 4.5: Connection pooling best practices
 - [ ] Task 4.4: Concurrent sessions with Eio
 - [ ] Task 4.5: Connection pooling best practices
 
 ### Phase 5 — Extractors and Combinators
-- [ ] Task 5.1: Basic field extractors (text, int, bool, etc.)
-- [ ] Task 5.2: Applicative style extraction
-- [ ] Task 5.3: Composite extractors guide
+- [x] Task 5.1: Basic field extractors (text, int, bool, etc.)
+- [x] Task 5.2: Applicative style extraction
+- [x] Task 5.3: Composite extractors guide
+- [x] Task 5.4: Node and relationship extractors
+- [x] Task 5.5: Custom extractors
 - [ ] Task 5.4: Node and relationship extractors
 - [ ] Task 5.5: Custom extractors
 
 ### Phase 6 — Pipeline and Transformations
-- [ ] Task 6.1: Pipeline module overview
-- [ ] Task 6.2: Query transformation operations
+- [x] Task 6.1: Pipeline module overview
+- [x] Task 6.2: Query transformation operations
+- [x] Task 6.3: Chaining operations
+- [x] Task 6.4: Real-world pipeline examples
 - [ ] Task 6.3: Chaining operations
 - [ ] Task 6.4: Real-world pipeline examples
 
 ### Phase 7 — Graph Operations
-- [ ] Task 7.1: Working with nodes
-- [ ] Task 7.2: Working with relationships
+- [x] Task 7.1: Working with nodes
+- [x] Task 7.2: Working with relationships
+- [x] Task 7.3: Path traversal
+- [x] Task 7.4: Lens-based graph navigation
 - [ ] Task 7.3: Path traversal
 - [ ] Task 7.4: Lens-based graph navigation
 
-### Phase 8 — Practical Examples
-- [ ] Task 8.1: User management system example
+-### Phase 8 — Practical Examples
+- [x] Task 8.1: User management system example
+- [x] Task 8.2: Social network example
+- [x] Task 8.3: Recommendation engine example
 - [ ] Task 8.2: Social network example
 - [ ] Task 8.3: Recommendation engine example
-- [ ] Task 8.4: ETL pipeline example
-- [ ] Task 8.5: Graph analytics example
+- [x] Task 8.4: ETL pipeline example
+- [x] Task 8.5: Graph analytics example
 
 ### Phase 9 — API Reference
-- [ ] Task 9.1: Value module reference
-- [ ] Task 9.2: Session module reference
-- [ ] Task 9.3: Query_builder module reference
-- [ ] Task 9.4: Extract module reference
-- [ ] Task 9.5: Transaction_dsl module reference
-- [ ] Task 9.6: Pipeline module reference
-- [ ] Task 9.7: Record module reference
-- [ ] Task 9.8: Error module reference
-- [ ] Task 9.9: Config module reference
+- [x] Task 9.1: Value module reference
+- [x] Task 9.2: Session module reference
+- [x] Task 9.3: Query_builder module reference
+- [x] Task 9.4: Extract module reference
+- [x] Task 9.5: Transaction_dsl module reference
+- [x] Task 9.6: Pipeline module reference
+- [x] Task 9.7: Record module reference
+- [x] Task 9.8: Error module reference
+- [x] Task 9.9: Config module reference
 
 ### Phase 10 — Best Practices
-- [ ] Task 10.1: Performance optimization guide
-- [ ] Task 10.2: Memory management with Eio
-- [ ] Task 10.3: Error handling patterns
-- [ ] Task 10.4: Testing strategies
-- [ ] Task 10.5: Production deployment checklist
+- [x] Task 10.1: Performance optimization guide
+- [x] Task 10.2: Memory management with Eio
+- [x] Task 10.3: Error handling patterns
+- [x] Task 10.4: Testing strategies
+- [x] Task 10.5: Production deployment checklist
 
 ### Phase 11 — Migration and Comparison
 - [ ] Task 11.1: Comparison with other Neo4j drivers
 - [ ] Task 11.2: Comparison with hasbolt (Haskell)
 - [ ] Task 11.3: Feature matrix
-- [ ] Task 11.4: Performance benchmarks documentation
+- [x] Task 11.4: Performance benchmarks documentation
 
 ### Phase 12 — Troubleshooting
-- [ ] Task 12.1: Common errors and solutions
-- [ ] Task 12.2: Debugging guide
-- [ ] Task 12.3: FAQ
-- [ ] Task 12.4: Known limitations
+- [x] Task 12.1: Common errors and solutions
+- [x] Task 12.2: Debugging guide
+- [x] Task 12.3: FAQ
+- [x] Task 12.4: Known limitations
 
 ---
 
