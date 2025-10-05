@@ -1,5 +1,9 @@
-(* File: examples/streaming.ml *)
-(* Task 2.2: Demonstrates streaming and memory-efficient processing *)
+(** streaming.ml - BETTER_API Edition
+
+    This demonstrates streaming and memory-efficient processing using:
+    - Query Builder DSL
+    - Record.at_* for extraction
+*)
 
 open Neo4j_eio
 
@@ -7,18 +11,16 @@ open Neo4j_eio
 let example_strict_materialization session =
   Printf.printf "Example 1: Strict materialization (all results loaded)\n";
 
-  let open Neo4j in
-
   (* Create some test data *)
-  match query_ session
-    ~statement:"UNWIND range(1, 10) AS x CREATE (n:StreamTest {value: x})"
-    () with
+  match Query_builder.execute_unit
+    (Query_builder.raw "UNWIND range(1, 10) AS x CREATE (n:StreamTest {value: x})")
+    session with
   | Error e -> Printf.eprintf "  ✗ CREATE failed: %s\n" (Error.to_string e)
   | Ok () ->
       (* Run query with strict materialization *)
-      (match query session
-         ~statement:"MATCH (n:StreamTest) RETURN n.value AS value ORDER BY n.value"
-         () with
+      (match Query_builder.execute
+         (Query_builder.raw "MATCH (n:StreamTest) RETURN n.value AS value ORDER BY n.value")
+         session with
        | Ok records ->
            Printf.printf "  ✓ Loaded %d records at once (strict)\n" (List.length records);
            Printf.printf "  Values: ";
@@ -30,7 +32,9 @@ let example_strict_materialization session =
            Printf.printf "\n  ✓ All data in memory at once\n";
 
            (* Cleanup *)
-           let _ = query_ session ~statement:"MATCH (n:StreamTest) DELETE n" () in ()
+           let _ = Query_builder.execute_unit
+             (Query_builder.raw "MATCH (n:StreamTest) DELETE n")
+             session in ()
        | Error e -> Printf.eprintf "  ✗ Query failed: %s\n" (Error.to_string e))
 
 (* Example 2: Streaming with custom fetch size *)
@@ -38,9 +42,9 @@ let example_streaming_fetch_size session =
   Printf.printf "\nExample 2: Streaming with custom fetch size\n";
 
   (* Create test data *)
-  match Neo4j.query_ session
-    ~statement:"UNWIND range(1, 20) AS x CREATE (n:StreamChunk {value: x})"
-    () with
+  match Query_builder.execute_unit
+    (Query_builder.raw "UNWIND range(1, 20) AS x CREATE (n:StreamChunk {value: x})")
+    session with
   | Error e -> Printf.eprintf "  ✗ CREATE failed: %s\n" (Error.to_string e)
   | Ok () ->
       (* Create record stream with fetch_size=5 *)
@@ -71,16 +75,18 @@ let example_streaming_fetch_size session =
            fetch_loop ();
 
            (* Cleanup *)
-           let _ = Neo4j.query_ session ~statement:"MATCH (n:StreamChunk) DELETE n" () in ())
+           let _ = Query_builder.execute_unit
+             (Query_builder.raw "MATCH (n:StreamChunk) DELETE n")
+             session in ())
 
 (* Example 3: Memory-efficient aggregation *)
 let example_memory_efficient_aggregation session =
   Printf.printf "\nExample 3: Memory-efficient aggregation (streaming sum)\n";
 
   (* Create test data *)
-  match Neo4j.query_ session
-    ~statement:"UNWIND range(1, 100) AS x CREATE (n:AggTest {value: x})"
-    () with
+  match Query_builder.execute_unit
+    (Query_builder.raw "UNWIND range(1, 100) AS x CREATE (n:AggTest {value: x})")
+    session with
   | Error e -> Printf.eprintf "  ✗ CREATE failed: %s\n" (Error.to_string e)
   | Ok () ->
       (* Stream and aggregate without loading all data *)
@@ -115,16 +121,18 @@ let example_memory_efficient_aggregation session =
            Printf.printf "  ✓ Memory-efficient: only 10 records in memory at a time\n";
 
            (* Cleanup *)
-           let _ = Neo4j.query_ session ~statement:"MATCH (n:AggTest) DELETE n" () in ())
+           let _ = Query_builder.execute_unit
+             (Query_builder.raw "MATCH (n:AggTest) DELETE n")
+             session in ())
 
 (* Example 4: Early termination *)
 let example_early_termination session =
   Printf.printf "\nExample 4: Early termination (stop when condition met)\n";
 
   (* Create test data *)
-  match Neo4j.query_ session
-    ~statement:"UNWIND range(1, 50) AS x CREATE (n:EarlyStop {value: x})"
-    () with
+  match Query_builder.execute_unit
+    (Query_builder.raw "UNWIND range(1, 50) AS x CREATE (n:EarlyStop {value: x})")
+    session with
   | Error e -> Printf.eprintf "  ✗ CREATE failed: %s\n" (Error.to_string e)
   | Ok () ->
       (* Stream and stop early *)
@@ -164,16 +172,18 @@ let example_early_termination session =
            find_target ();
 
            (* Cleanup *)
-           let _ = Neo4j.query_ session ~statement:"MATCH (n:EarlyStop) DELETE n" () in ())
+           let _ = Query_builder.execute_unit
+             (Query_builder.raw "MATCH (n:EarlyStop) DELETE n")
+             session in ())
 
 (* Example 5: Using record_stream_to_list helper *)
 let example_record_stream_to_list session =
   Printf.printf "\nExample 5: Using record_stream_to_list helper\n";
 
   (* Create test data *)
-  match Neo4j.query_ session
-    ~statement:"UNWIND range(1, 15) AS x CREATE (n:ToList {value: x})"
-    () with
+  match Query_builder.execute_unit
+    (Query_builder.raw "UNWIND range(1, 15) AS x CREATE (n:ToList {value: x})")
+    session with
   | Error e -> Printf.eprintf "  ✗ CREATE failed: %s\n" (Error.to_string e)
   | Ok () ->
       (* Create record stream *)
@@ -193,7 +203,9 @@ let example_record_stream_to_list session =
                 Printf.printf "  ✓ Helper automatically fetched all chunks\n";
 
                 (* Cleanup *)
-                let _ = Neo4j.query_ session ~statement:"MATCH (n:ToList) DELETE n" () in ()))
+                let _ = Query_builder.execute_unit
+                  (Query_builder.raw "MATCH (n:ToList) DELETE n")
+                  session in ()))
 
 (* Example 6: Comparing strict vs streaming memory usage *)
 let example_memory_comparison session =
@@ -202,16 +214,16 @@ let example_memory_comparison session =
   let count = 1000 in
 
   (* Create large dataset *)
-  match Neo4j.query_ session
-    ~statement:(Printf.sprintf "UNWIND range(1, %d) AS x CREATE (n:MemTest {value: x, data: 'padding_' + x})" count)
-    () with
+  match Query_builder.execute_unit
+    (Query_builder.raw (Printf.sprintf "UNWIND range(1, %d) AS x CREATE (n:MemTest {value: x, data: 'padding_' + x})" count))
+    session with
   | Error e -> Printf.eprintf "  ✗ CREATE failed: %s\n" (Error.to_string e)
   | Ok () ->
       (* Strict: loads all at once *)
       Printf.printf "  Strict materialization:\n";
-      (match Neo4j.query session
-         ~statement:"MATCH (n:MemTest) RETURN n.value AS value"
-         () with
+      (match Query_builder.execute
+         (Query_builder.raw "MATCH (n:MemTest) RETURN n.value AS value")
+         session with
        | Ok records ->
            Printf.printf "    ✓ Loaded %d records at once\n" (List.length records);
            Printf.printf "    Memory: ALL %d records in memory\n" count
@@ -239,16 +251,18 @@ let example_memory_comparison session =
            consume ());
 
       (* Cleanup *)
-      let _ = Neo4j.query_ session ~statement:"MATCH (n:MemTest) DELETE n" () in ()
+      let _ = Query_builder.execute_unit
+        (Query_builder.raw "MATCH (n:MemTest) DELETE n")
+        session in ()
 
 (* Example 7: Processing stream chunks *)
 let example_streaming_chunks session =
   Printf.printf "\nExample 7: Processing stream chunks\n";
 
   (* Create test data *)
-  match Neo4j.query_ session
-    ~statement:"UNWIND range(1, 12) AS x CREATE (n:ChunkTest {id: x, name: 'Node_' + x})"
-    () with
+  match Query_builder.execute_unit
+    (Query_builder.raw "UNWIND range(1, 12) AS x CREATE (n:ChunkTest {id: x, name: 'Node_' + x})")
+    session with
   | Error e -> Printf.eprintf "  ✗ CREATE failed: %s\n" (Error.to_string e)
   | Ok () ->
       (* Stream and process chunks *)
@@ -276,7 +290,9 @@ let example_streaming_chunks session =
            process_stream ();
 
            (* Cleanup *)
-           let _ = Neo4j.query_ session ~statement:"MATCH (n:ChunkTest) DELETE n" () in ())
+           let _ = Query_builder.execute_unit
+             (Query_builder.raw "MATCH (n:ChunkTest) DELETE n")
+             session in ())
 
 (* Main entry point *)
 let () =

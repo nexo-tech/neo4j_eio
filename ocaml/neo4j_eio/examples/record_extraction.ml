@@ -1,4 +1,9 @@
-(* Example: Using query for 100% hasbolt API parity *)
+(** record_extraction.ml - BETTER_API Edition
+
+    This demonstrates record extraction using:
+    - Query Builder DSL
+    - Record.at_* for extraction
+*)
 
 open Neo4j_eio
 
@@ -13,9 +18,9 @@ let () =
       match Session.with_session ~sw ~net:env#net cfg (fun session ->
         (* Example 1: Extract single field using Value.at *)
         Printf.printf "Example 1: Extract single field by name\n";
-        (match Neo4j.query session
-           ~statement:"RETURN 42 AS answer"
-           () with
+        (match Query_builder.execute
+           (Query_builder.raw "RETURN 42 AS answer")
+           session with
          | Ok [record] ->
              (match Value.at record "answer" with
               | Some (Value.Int n) ->
@@ -27,15 +32,14 @@ let () =
 
         (* Example 2: Extract multiple fields *)
         Printf.printf "\nExample 2: Extract multiple fields from one record\n";
-        let open Neo4j in
-        (match query session
-           ~statement:"RETURN $name AS name, $age AS age, $active AS active"
-           ~parameters:(props [
-             "name" =: text "Alice";
-             "age" =: int 30L;
-             "active" =: bool true;
-           ])
-           () with
+        (match Query_builder.execute
+           (Query_builder.raw "RETURN $name AS name, $age AS age, $active AS active"
+            |> Query_builder.with_params [
+              ("name", Value.Text "Alice");
+              ("age", Value.Int 30L);
+              ("active", Value.Bool true);
+            ])
+           session with
          | Ok [record] ->
              let name = Value.at record "name" in
              let age = Value.at record "age" in
@@ -56,9 +60,9 @@ let () =
 
         (* Example 3: Multiple records with field extraction *)
         Printf.printf "\nExample 3: Multiple records with named field access\n";
-        (match Neo4j.query session
-           ~statement:"UNWIND [1, 2, 3] AS x RETURN x AS number, x * 2 AS doubled"
-           () with
+        (match Query_builder.execute
+           (Query_builder.raw "UNWIND [1, 2, 3] AS x RETURN x AS number, x * 2 AS doubled")
+           session with
          | Ok records ->
              Printf.printf "  Got %d records:\n" (List.length records);
              List.iter (fun record ->
@@ -72,9 +76,9 @@ let () =
 
         (* Example 4: Unnamed fields (Neo4j generates default names) *)
         Printf.printf "\nExample 4: Query without AS aliases\n";
-        (match Neo4j.query session
-           ~statement:"RETURN 1, 2, 3"
-           () with
+        (match Query_builder.execute
+           (Query_builder.raw "RETURN 1, 2, 3")
+           session with
          | Ok [_record] ->
              (* Neo4j generates field names like "1", "2", "3" for unnamed columns *)
              Printf.printf "  Note: Use AS to name your fields for better code!\n";
@@ -84,23 +88,22 @@ let () =
 
         Printf.printf "\nExample 5: New API with Node properties\n";
         let label = Printf.sprintf "Person_%d" (Random.int 1000000) in
-        let open Neo4j in
-        (match query session
-           ~statement:(Printf.sprintf "CREATE (p:%s {name: $name, age: $age}) RETURN p.name AS name, p.age AS age" label)
-           ~parameters:(props [
-             "name" =: text "Bob";
-             "age" =: int 25L;
-           ])
-           () with
+        (match Query_builder.execute
+           (Query_builder.raw (Printf.sprintf "CREATE (p:%s {name: $name, age: $age}) RETURN p.name AS name, p.age AS age" label)
+            |> Query_builder.with_params [
+              ("name", Value.Text "Bob");
+              ("age", Value.Int 25L);
+            ])
+           session with
          | Ok [record] ->
              (match Value.at record "name", Value.at record "age" with
               | Some (Value.Text name), Some (Value.Int age) ->
                   Printf.printf "  Created person: name=%s, age=%Ld\n" name age;
                   Printf.printf "  ✓ Field names preserved through CREATE!\n";
                   (* Cleanup *)
-                  let _ = query_ session
-                    ~statement:(Printf.sprintf "MATCH (n:%s) DELETE n" label)
-                    () in ()
+                  let _ = Query_builder.execute_unit
+                    (Query_builder.raw (Printf.sprintf "MATCH (n:%s) DELETE n" label))
+                    session in ()
               | _ -> Printf.printf "  ✗ Unexpected value types\n")
          | Ok _ -> Printf.printf "  ✗ Unexpected number of records\n"
          | Error e -> Printf.eprintf "  ✗ Query failed: %s\n" (Error.to_string e));

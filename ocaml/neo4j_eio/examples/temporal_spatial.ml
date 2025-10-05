@@ -1,5 +1,9 @@
-(* File: examples/temporal_spatial.ml *)
-(* Task 2.3: Demonstrates temporal and spatial types *)
+(** temporal_spatial.ml - BETTER_API Edition
+
+    This demonstrates temporal and spatial types using:
+    - Query Builder DSL
+    - Record.at_* for extraction
+*)
 
 open Neo4j_eio
 
@@ -7,10 +11,9 @@ open Neo4j_eio
 let example_point2d_cartesian session =
   Printf.printf "Example 1: Point2D - Cartesian coordinate system\n";
 
-  let open Neo4j in
-  match query session
-    ~statement:"RETURN point({x: 3.0, y: 4.0}) AS pt"
-    () with
+  match Query_builder.execute
+    (Query_builder.raw "RETURN point({x: 3.0, y: 4.0}) AS pt")
+    session with
   | Ok [record] ->
       (match Record.at_point2d record "pt" with
        | Ok pt ->
@@ -25,10 +28,9 @@ let example_point2d_cartesian session =
 let example_point2d_wgs84 session =
   Printf.printf "\nExample 2: Point2D - WGS-84 (latitude/longitude)\n";
 
-  let open Neo4j in
-  match query session
-    ~statement:"RETURN point({latitude: 37.7749, longitude: -122.4194}) AS pt"
-    () with
+  match Query_builder.execute
+    (Query_builder.raw "RETURN point({latitude: 37.7749, longitude: -122.4194}) AS pt")
+    session with
   | Ok [record] ->
       (match Record.at_point2d record "pt" with
        | Ok pt ->
@@ -44,10 +46,9 @@ let example_point2d_wgs84 session =
 let example_point3d_cartesian session =
   Printf.printf "\nExample 3: Point3D - Cartesian 3D coordinates\n";
 
-  let open Neo4j in
-  match query session
-    ~statement:"RETURN point({x: 1.0, y: 2.0, z: 3.0}) AS pt"
-    () with
+  match Query_builder.execute
+    (Query_builder.raw "RETURN point({x: 1.0, y: 2.0, z: 3.0}) AS pt")
+    session with
   | Ok [record] ->
       (match Record.at_point3d record "pt" with
        | Ok pt ->
@@ -63,10 +64,9 @@ let example_point3d_cartesian session =
 let example_point3d_wgs84 session =
   Printf.printf "\nExample 4: Point3D - WGS-84 with height\n";
 
-  let open Neo4j in
-  match query session
-    ~statement:"RETURN point({latitude: 51.5074, longitude: -0.1278, height: 100.0}) AS pt"
-    () with
+  match Query_builder.execute
+    (Query_builder.raw "RETURN point({latitude: 51.5074, longitude: -0.1278, height: 100.0}) AS pt")
+    session with
   | Ok [record] ->
       (match Record.at_point3d record "pt" with
        | Ok pt ->
@@ -84,10 +84,9 @@ let example_point3d_wgs84 session =
 let example_duration session =
   Printf.printf "\nExample 5: Duration type\n";
 
-  let open Neo4j in
-  match query session
-    ~statement:"RETURN duration({months: 2, days: 14, hours: 16, minutes: 30, seconds: 45}) AS dur"
-    () with
+  match Query_builder.execute
+    (Query_builder.raw "RETURN duration({months: 2, days: 14, hours: 16, minutes: 30, seconds: 45}) AS dur")
+    session with
   | Ok [record] ->
       (match Record.at_duration record "dur" with
        | Ok dur ->
@@ -103,10 +102,9 @@ let example_duration session =
 let example_date session =
   Printf.printf "\nExample 6: Date type\n";
 
-  let open Neo4j in
-  match query session
-    ~statement:"RETURN date('2025-10-05') AS dt"
-    () with
+  match Query_builder.execute
+    (Query_builder.raw "RETURN date('2025-10-05') AS dt")
+    session with
   | Ok [record] ->
       (match Record.at_date record "dt" with
        | Ok dt ->
@@ -121,10 +119,9 @@ let example_date session =
 let example_local_time session =
   Printf.printf "\nExample 7: LocalTime (time without timezone)\n";
 
-  let open Neo4j in
-  match query session
-    ~statement:"RETURN localtime('12:34:56.789') AS t"
-    () with
+  match Query_builder.execute
+    (Query_builder.raw "RETURN localtime('12:34:56.789') AS t")
+    session with
   | Ok [record] ->
       (match Record.at_local_time record "t" with
        | Ok t ->
@@ -140,10 +137,9 @@ let example_local_time session =
 let example_time_with_offset session =
   Printf.printf "\nExample 8: Time with timezone offset\n";
 
-  let open Neo4j in
-  match query session
-    ~statement:"RETURN time('12:34:56.789+02:00') AS t"
-    () with
+  match Query_builder.execute
+    (Query_builder.raw "RETURN time('12:34:56.789+02:00') AS t")
+    session with
   | Ok [record] ->
       (match Record.at_time record "t" with
        | Ok t ->
@@ -159,10 +155,9 @@ let example_time_with_offset session =
 let example_local_datetime session =
   Printf.printf "\nExample 9: LocalDateTime (datetime without timezone)\n";
 
-  let open Neo4j in
-  match query session
-    ~statement:"RETURN localdatetime('2025-10-05T15:30:45.123') AS dt"
-    () with
+  match Query_builder.execute
+    (Query_builder.raw "RETURN localdatetime('2025-10-05T15:30:45.123') AS dt")
+    session with
   | Ok [record] ->
       (match Record.at_local_datetime record "dt" with
        | Ok dt ->
@@ -178,10 +173,9 @@ let example_local_datetime session =
 let example_datetime_offset session =
   Printf.printf "\nExample 10: DateTime with timezone offset\n";
 
-  let open Neo4j in
-  match query session
-    ~statement:"RETURN datetime('2025-10-05T15:30:45.123+02:00') AS dt"
-    () with
+  match Query_builder.execute
+    (Query_builder.raw "RETURN datetime('2025-10-05T15:30:45.123+02:00') AS dt")
+    session with
   | Ok [record] ->
       (match Record.at_datetime_offset record "dt" with
        | Ok dt ->
@@ -197,10 +191,9 @@ let example_datetime_offset session =
 let example_datetime_zone_id session =
   Printf.printf "\nExample 11: DateTime with named timezone\n";
 
-  let open Neo4j in
-  match query session
-    ~statement:"RETURN datetime('2025-10-05T15:30:45.123[Europe/Paris]') AS dt"
-    () with
+  match Query_builder.execute
+    (Query_builder.raw "RETURN datetime('2025-10-05T15:30:45.123[Europe/Paris]') AS dt")
+    session with
   | Ok [record] ->
       (match Record.at_datetime_zone_id record "dt" with
        | Ok dt ->
@@ -218,14 +211,13 @@ let example_storing_temporal_spatial session =
   Printf.printf "\nExample 12: Storing and retrieving temporal/spatial data\n";
 
   let label = Printf.sprintf "Event_%d" (Random.int 1000000) in
-  let open Neo4j in
 
   (* Create a node with temporal and spatial properties *)
-  match query session
-    ~statement:(Printf.sprintf
+  match Query_builder.execute
+    (Query_builder.raw (Printf.sprintf
       "CREATE (e:%s {name: 'Conference', location: point({latitude: 48.8566, longitude: 2.3522}), start_time: datetime('2025-10-05T09:00:00[Europe/Paris]')}) RETURN e.name AS name, e.location AS location, e.start_time AS start_time"
-      label)
-    () with
+      label))
+    session with
   | Ok [record] ->
       (match Record.at_text record "name",
              Record.at_point2d record "location",
@@ -237,9 +229,9 @@ let example_storing_temporal_spatial session =
            Printf.printf "    Start time: %s\n" start_time.Value.timezone_id;
 
            (* Cleanup *)
-           let _ = query_ session
-             ~statement:(Printf.sprintf "MATCH (n:%s) DELETE n" label)
-             () in
+           let _ = Query_builder.execute_unit
+             (Query_builder.raw (Printf.sprintf "MATCH (n:%s) DELETE n" label))
+             session in
            Printf.printf "  ✓ Cleanup completed\n"
        | _ ->
            Printf.printf "  ✗ Decode error\n")
@@ -250,10 +242,9 @@ let example_storing_temporal_spatial session =
 let example_duration_calculations session =
   Printf.printf "\nExample 13: Duration calculations\n";
 
-  let open Neo4j in
-  match query session
-    ~statement:"RETURN duration.between(date('2025-01-01'), date('2025-10-05')) AS dur"
-    () with
+  match Query_builder.execute
+    (Query_builder.raw "RETURN duration.between(date('2025-01-01'), date('2025-10-05')) AS dur")
+    session with
   | Ok [record] ->
       (match Record.at_duration record "dur" with
        | Ok dur ->
@@ -269,10 +260,9 @@ let example_duration_calculations session =
 let example_point_distance session =
   Printf.printf "\nExample 14: Calculating distance between points\n";
 
-  let open Neo4j in
-  match query session
-    ~statement:"WITH point({latitude: 48.8566, longitude: 2.3522}) AS paris, point({latitude: 51.5074, longitude: -0.1278}) AS london RETURN point.distance(paris, london) AS dist"
-    () with
+  match Query_builder.execute
+    (Query_builder.raw "WITH point({latitude: 48.8566, longitude: 2.3522}) AS paris, point({latitude: 51.5074, longitude: -0.1278}) AS london RETURN point.distance(paris, london) AS dist")
+    session with
   | Ok [record] ->
       (match Record.at_float record "dist" with
        | Ok dist ->
