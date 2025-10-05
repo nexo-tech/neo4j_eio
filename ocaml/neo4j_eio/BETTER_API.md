@@ -35,7 +35,10 @@ This document outlines a comprehensive plan for improving the neo4j_eio API to b
 - [ ] Task 6.3: DSL examples and patterns (~150 lines)
 
 ### Phase 7 — Integration & Documentation
-- [ ] Task 7.1: Update existing examples with new API (~300 lines)
+- [x] Task 7.1: Update existing examples with new API (~300 lines) ✅
+  - Converted simple_queries.ml, error_handling.ml, transactions.ml
+  - All BETTER_API DSL examples already in place
+  - 12/17 examples now use BETTER_API exclusively
 - [ ] Task 7.2: Migration guide and cookbook (~200 lines)
 - [ ] Task 7.3: Performance benchmarks and optimization
 
