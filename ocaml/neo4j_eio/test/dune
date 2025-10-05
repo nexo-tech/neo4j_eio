@@ -152,3 +152,9 @@
  (modules composite_extractors_test)
  (libraries neo4j_eio eio eio_main alcotest test_helper)
  (action (run %{exe:composite_extractors_test.exe})))
+
+(test
+ (name cypher_test)
+ (modules cypher_test)
+ (libraries neo4j_eio eio eio_main alcotest test_helper)
+ (action (run %{exe:cypher_test.exe})))
