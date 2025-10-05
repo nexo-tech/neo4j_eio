@@ -1,270 +1,333 @@
-(* File: examples/transactions.ml *)
-(* Task 2.1: Demonstrates transaction patterns *)
+(** Transactions - BETTER_API Edition
+
+    This demonstrates transaction patterns using:
+    - Transaction DSL with automatic commit/rollback
+    - Query Builder DSL for clean query construction
+    - Monadic composition with let* syntax
+*)
 
 open Neo4j_eio
 
-(* Example 1: Explicit BEGIN/COMMIT/ROLLBACK *)
-let example_explicit_transaction session =
-  Printf.printf "Example 1: Explicit transaction with COMMIT\n";
+(* Example 1: Automatic COMMIT with Transaction DSL *)
+let example_automatic_commit session =
+  Printf.printf "Example 1: Automatic transaction commit\n";
 
   let label = Printf.sprintf "TxTest_%d" (Random.int 1000000) in
-  let open Neo4j in
+  let open Transaction_dsl in
 
-  (* Begin transaction *)
-  match Session.begin_transaction session () with
-  | Error e -> Printf.eprintf "  ✗ BEGIN failed: %s\n" (Error.to_string e)
-  | Ok () ->
-      Printf.printf "  ✓ Transaction begun\n";
+  let tx =
+    let* records = exec_query_builder
+        (Query_builder.create_node (Printf.sprintf "(n:%s {value: 42})" label)
+         |> Query_builder.return ["id(n) AS node_id"]) in
+    match records with
+    | [record] ->
+        (match Record.at_int record "node_id" with
+         | Ok node_id ->
+             Printf.printf "  ✓ Node created in transaction (id: %Ld)\n" node_id;
+             return node_id
+         | Error _ ->
+             fail (Error.Protocol "Decode error"))
+    | _ -> fail (Error.Protocol "Unexpected result")
+  in
 
-      (* Create a node within the transaction *)
-      (match query session
-         ~statement:(Printf.sprintf "CREATE (n:%s {value: 42}) RETURN n" label)
-         () with
-       | Error e -> Printf.eprintf "  ✗ CREATE failed: %s\n" (Error.to_string e)
-       | Ok [record] ->
-           (match Record.at_node record "n" with
-            | Ok node ->
-                Printf.printf "  ✓ Node created in transaction (id: %Ld)\n" node.node_id
-            | Error _ -> Printf.printf "  ✗ Decode error\n");
+  (match run tx session with
+   | Ok _node_id ->
+       Printf.printf "  ✓ Transaction committed automatically\n";
 
-           (* Commit the transaction *)
-           (match Session.commit session with
-            | Error e -> Printf.eprintf "  ✗ COMMIT failed: %s\n" (Error.to_string e)
-            | Ok () ->
-                Printf.printf "  ✓ Transaction committed\n";
-
-                (* Verify node persists *)
-                (match query session
-                   ~statement:(Printf.sprintf "MATCH (n:%s) RETURN count(n) AS cnt" label)
-                   () with
-                 | Ok [r] ->
-                     (match Record.at_int r "cnt" with
-                      | Ok 1L ->
-                          Printf.printf "  ✓ Node persisted after commit\n";
-                          (* Cleanup *)
-                          let _ = query_ session
-                            ~statement:(Printf.sprintf "MATCH (n:%s) DELETE n" label)
-                            () in ()
-                      | Ok n -> Printf.printf "  ✗ Expected 1 node, got %Ld\n" n
-                      | Error _ -> Printf.printf "  ✗ Decode error\n")
-                 | _ -> ()))
-       | _ -> ())
+       (* Verify node persists *)
+       let verify = let* records = exec_query_builder
+           (Query_builder.match_ (Printf.sprintf "(n:%s)" label)
+            |> Query_builder.return ["count(n) AS cnt"]) in
+         match records with
+         | [r] ->
+             (match Record.at_int r "cnt" with
+              | Ok 1L ->
+                  Printf.printf "  ✓ Node persisted after commit\n";
+                  (* Cleanup *)
+                  exec_query_builder_unit
+                    (Query_builder.match_ (Printf.sprintf "(n:%s)" label)
+                     |> Query_builder.delete ["n"])
+              | Ok n ->
+                  Printf.printf "  ✗ Expected 1 node, got %Ld\n" n;
+                  return ()
+              | Error _ -> return ())
+         | _ -> return ()
+       in
+       let _ = run verify session in ()
+   | Error e -> Printf.eprintf "  ✗ Transaction failed: %s\n" (Error.to_string e))
 
 (* Example 2: Explicit ROLLBACK *)
 let example_explicit_rollback session =
-  Printf.printf "\nExample 2: Explicit transaction with ROLLBACK\n";
+  Printf.printf "\nExample 2: Explicit ROLLBACK\n";
 
   let label = Printf.sprintf "RollbackTest_%d" (Random.int 1000000) in
-  let open Neo4j in
+  let open Transaction_dsl in
 
-  (* Begin transaction *)
-  match Session.begin_transaction session () with
-  | Error e -> Printf.eprintf "  ✗ BEGIN failed: %s\n" (Error.to_string e)
-  | Ok () ->
-      Printf.printf "  ✓ Transaction begun\n";
+  let tx =
+    let* () = exec_query_builder_unit
+        (Query_builder.create_node (Printf.sprintf "(n:%s {value: 99})" label)) in
+    Printf.printf "  ✓ Node created in transaction\n";
 
-      (* Create a node *)
-      (match query_ session
-         ~statement:(Printf.sprintf "CREATE (n:%s {value: 99})" label)
-         () with
-       | Error e -> Printf.eprintf "  ✗ CREATE failed: %s\n" (Error.to_string e)
-       | Ok () ->
-           Printf.printf "  ✓ Node created in transaction\n";
+    (* Explicitly rollback *)
+    let* () = rollback in
+    Printf.printf "  ✓ Transaction rolled back\n";
+    return ()
+  in
 
-           (* Rollback the transaction *)
-           (match Session.rollback session with
-            | Error e -> Printf.eprintf "  ✗ ROLLBACK failed: %s\n" (Error.to_string e)
-            | Ok () ->
-                Printf.printf "  ✓ Transaction rolled back\n";
+  (match run tx session with
+   | Ok () ->
+       (* Verify node doesn't exist *)
+       let verify = let* records = exec_query_builder
+           (Query_builder.match_ (Printf.sprintf "(n:%s)" label)
+            |> Query_builder.return ["count(n) AS cnt"]) in
+         match records with
+         | [r] ->
+             (match Record.at_int r "cnt" with
+              | Ok 0L ->
+                  Printf.printf "  ✓ Node rolled back successfully\n";
+                  return ()
+              | Ok n ->
+                  Printf.printf "  ✗ Expected 0 nodes, got %Ld\n" n;
+                  return ()
+              | Error _ -> return ())
+         | _ -> return ()
+       in
+       let _ = run verify session in ()
+   | Error e -> Printf.eprintf "  ✗ Error: %s\n" (Error.to_string e))
 
-                (* Verify node doesn't exist *)
-                (match query session
-                   ~statement:(Printf.sprintf "MATCH (n:%s) RETURN count(n) AS cnt" label)
-                   () with
-                 | Ok [r] ->
-                     (match Record.at_int r "cnt" with
-                      | Ok 0L -> Printf.printf "  ✓ Node rolled back successfully\n"
-                      | Ok n -> Printf.printf "  ✗ Expected 0 nodes, got %Ld\n" n
-                      | Error _ -> Printf.printf "  ✗ Decode error\n")
-                 | _ -> ())))
+(* Example 3: Transaction DSL with automatic commit on success *)
+let example_dsl_auto_commit session =
+  Printf.printf "\nExample 3: Transaction DSL auto-commit on success\n";
 
-(* Example 3: Using transact helper for automatic rollback on error *)
-let example_transact_helper session =
-  Printf.printf "\nExample 3: Using transact helper (auto-rollback on error)\n";
+  let label = Printf.sprintf "DslTest_%d" (Random.int 1000000) in
+  let open Transaction_dsl in
 
-  let label = Printf.sprintf "TransactTest_%d" (Random.int 1000000) in
+  let tx =
+    Printf.printf "  ✓ Transaction started\n";
 
-  (* Use transact - automatically commits on success *)
-  match Session.transact session (fun s ->
-    let open Neo4j in
-    Printf.printf "  ✓ Transaction started automatically\n";
-
-    (* Create a node *)
-    match query s
-      ~statement:(Printf.sprintf "CREATE (n:%s {name: 'Alice'}) RETURN n.name AS name" label)
-      () with
-    | Error e -> Error e
-    | Ok [record] ->
+    let* records = exec_query_builder
+        (Query_builder.create_node (Printf.sprintf "(n:%s {name: 'Alice'})" label)
+         |> Query_builder.return ["n.name AS name"]) in
+    match records with
+    | [record] ->
         (match Record.at_text record "name" with
          | Ok name ->
              Printf.printf "  ✓ Node created: %s\n" name;
-             Ok [record]
+             return ()
          | Error e ->
-             Error (Error.Protocol (Format.asprintf "Decode error: %a" Record.pp_decode_error e)))
-    | Ok _ -> Error (Error.Protocol "Unexpected result")
-  ) with
-  | Error e ->
-      Printf.eprintf "  ✗ Transaction failed: %s\n" (Error.to_string e)
-  | Ok _ ->
-      Printf.printf "  ✓ Transaction committed automatically\n";
+             fail (Error.Protocol (Format.asprintf "Decode error: %a" Record.pp_decode_error e)))
+    | _ -> fail (Error.Protocol "Unexpected result")
+  in
 
-      (* Verify node exists *)
-      (match Neo4j.query session
-         ~statement:(Printf.sprintf "MATCH (n:%s) RETURN count(n) AS cnt" label)
-         () with
-       | Ok [r] ->
-           (match Record.at_int r "cnt" with
-            | Ok 1L ->
-                Printf.printf "  ✓ Node persisted after transact\n";
-                (* Cleanup *)
-                let _ = Neo4j.query_ session
-                  ~statement:(Printf.sprintf "MATCH (n:%s) DELETE n" label)
-                  () in ()
-            | Ok n -> Printf.printf "  ✗ Expected 1 node, got %Ld\n" n
-            | Error _ -> Printf.printf "  ✗ Decode error\n")
-       | _ -> ())
+  (match run tx session with
+   | Ok () ->
+       Printf.printf "  ✓ Transaction committed automatically\n";
 
-(* Example 4: Transact with automatic rollback on failure *)
-let example_transact_rollback session =
-  Printf.printf "\nExample 4: Transact auto-rollback on query error\n";
+       (* Verify and cleanup *)
+       let _ = Query_builder.execute_unit
+           (Query_builder.match_ (Printf.sprintf "(n:%s)" label)
+            |> Query_builder.detach_delete ["n"])
+           session in ()
+   | Error e -> Printf.eprintf "  ✗ Transaction failed: %s\n" (Error.to_string e))
+
+(* Example 4: Automatic rollback on failure with catch *)
+let example_auto_rollback_on_error session =
+  Printf.printf "\nExample 4: Auto-rollback on query error\n";
 
   let label = Printf.sprintf "FailTest_%d" (Random.int 1000000) in
+  let open Transaction_dsl in
 
-  (* This transaction will fail and rollback automatically *)
-  match Session.transact session (fun s ->
-    let open Neo4j in
+  let tx =
     Printf.printf "  ✓ Transaction started\n";
 
-    (* Create a node *)
-    match query_ s
-      ~statement:(Printf.sprintf "CREATE (n:%s {value: 123})" label)
-      () with
-    | Error e -> Error e
-    | Ok () ->
-        Printf.printf "  ✓ Node created\n";
+    let* () = exec_query_builder_unit
+        (Query_builder.create_node (Printf.sprintf "(n:%s {value: 123})" label)) in
+    Printf.printf "  ✓ Node created\n";
 
-        (* Intentionally cause an error *)
-        query s ~statement:"INVALID CYPHER SYNTAX" ()
-  ) with
-  | Error e ->
-      Printf.printf "  ✓ Transaction failed (as expected): %s\n"
-        (String.sub (Error.to_string e) 0 (min 50 (String.length (Error.to_string e))));
+    (* Intentionally cause an error *)
+    exec_query_builder (Query_builder.raw "INVALID CYPHER SYNTAX")
+  in
 
-      (* Verify node was rolled back *)
-      (match Neo4j.query session
-         ~statement:(Printf.sprintf "MATCH (n:%s) RETURN count(n) AS cnt" label)
-         () with
-       | Ok [r] ->
-           (match Record.at_int r "cnt" with
-            | Ok 0L -> Printf.printf "  ✓ Node automatically rolled back\n"
-            | Ok n -> Printf.printf "  ✗ Expected 0 nodes, got %Ld\n" n
-            | Error _ -> Printf.printf "  ✗ Decode error\n")
-       | _ -> ())
-  | Ok _ ->
-      Printf.printf "  ✗ Transaction should have failed\n"
+  (match run tx session with
+   | Error e ->
+       let err_str = Error.to_string e in
+       Printf.printf "  ✓ Transaction failed (as expected): %s\n"
+         (String.sub err_str 0 (min 50 (String.length err_str)));
 
-(* Example 5: Multi-query transaction *)
+       (* Verify node was rolled back *)
+       let verify = let* records = exec_query_builder
+           (Query_builder.match_ (Printf.sprintf "(n:%s)" label)
+            |> Query_builder.return ["count(n) AS cnt"]) in
+         match records with
+         | [r] ->
+             (match Record.at_int r "cnt" with
+              | Ok 0L ->
+                  Printf.printf "  ✓ Node automatically rolled back\n";
+                  return ()
+              | Ok n ->
+                  Printf.printf "  ✗ Expected 0 nodes, got %Ld\n" n;
+                  return ()
+              | Error _ -> return ())
+         | _ -> return ()
+       in
+       let _ = run verify session in ()
+   | Ok _ -> Printf.printf "  ✗ Transaction should have failed\n")
+
+(* Example 5: Multi-query transaction with monadic composition *)
 let example_multi_query_transaction session =
-  Printf.printf "\nExample 5: Multi-query transaction\n";
+  Printf.printf "\nExample 5: Multi-query transaction (monadic)\n";
 
   let label = Printf.sprintf "MultiQuery_%d" (Random.int 1000000) in
+  let open Transaction_dsl in
 
-  match Session.transact session (fun s ->
-    let open Neo4j in
+  let tx =
     Printf.printf "  ✓ Transaction started\n";
 
     (* Query 1: Create first node *)
-    match query_ s
-      ~statement:(Printf.sprintf "CREATE (a:%s {name: 'Alice'})" label)
-      () with
-    | Error e -> Error e
-    | Ok () ->
-        Printf.printf "  ✓ Created Alice\n";
+    let* () = exec_query_builder_unit
+        (Query_builder.create_node (Printf.sprintf "(a:%s {name: 'Alice'})" label)) in
+    Printf.printf "  ✓ Created Alice\n";
 
-        (* Query 2: Create second node *)
-        match query_ s
-          ~statement:(Printf.sprintf "CREATE (b:%s {name: 'Bob'})" label)
-          () with
-        | Error e -> Error e
-        | Ok () ->
-            Printf.printf "  ✓ Created Bob\n";
+    (* Query 2: Create second node *)
+    let* () = exec_query_builder_unit
+        (Query_builder.create_node (Printf.sprintf "(b:%s {name: 'Bob'})" label)) in
+    Printf.printf "  ✓ Created Bob\n";
 
-            (* Query 3: Create relationship *)
-            match query s
-              ~statement:(Printf.sprintf
-                "MATCH (a:%s {name: 'Alice'}), (b:%s {name: 'Bob'}) CREATE (a)-[r:KNOWS]->(b) RETURN type(r) AS rel_type"
-                label label)
-              () with
-            | Error e -> Error e
-            | Ok [record] ->
-                (match Record.at_text record "rel_type" with
-                 | Ok rel_type ->
-                     Printf.printf "  ✓ Created relationship: %s\n" rel_type;
-                     Ok ()
-                 | Error e ->
-                     Error (Error.Protocol (Format.asprintf "Decode error: %a" Record.pp_decode_error e)))
-            | Ok _ -> Error (Error.Protocol "Unexpected result")
-  ) with
-  | Error e ->
-      Printf.eprintf "  ✗ Transaction failed: %s\n" (Error.to_string e)
-  | Ok () ->
-      Printf.printf "  ✓ All queries committed together\n";
+    (* Query 3: Create relationship *)
+    let* records = exec_query_builder
+        (Query_builder.match_ (Printf.sprintf "(a:%s {name: 'Alice'}), (b:%s {name: 'Bob'})" label label)
+         |> Query_builder.create "(a)-[r:KNOWS]->(b)"
+         |> Query_builder.return ["type(r) AS rel_type"]) in
+    match records with
+    | [record] ->
+        (match Record.at_text record "rel_type" with
+         | Ok rel_type ->
+             Printf.printf "  ✓ Created relationship: %s\n" rel_type;
+             return ()
+         | Error e ->
+             fail (Error.Protocol (Format.asprintf "Decode error: %a" Record.pp_decode_error e)))
+    | _ -> fail (Error.Protocol "Unexpected result")
+  in
 
-      (* Verify all data exists *)
-      (match Neo4j.query session
-         ~statement:(Printf.sprintf "MATCH (n:%s) RETURN count(n) AS cnt" label)
-         () with
-       | Ok [r] ->
-           (match Record.at_int r "cnt" with
-            | Ok 2L ->
-                Printf.printf "  ✓ Both nodes persisted\n";
-                (* Cleanup *)
-                let _ = Neo4j.query_ session
-                  ~statement:(Printf.sprintf "MATCH (n:%s) DETACH DELETE n" label)
-                  () in ()
-            | Ok n -> Printf.printf "  ✗ Expected 2 nodes, got %Ld\n" n
-            | Error _ -> Printf.printf "  ✗ Decode error\n")
-       | _ -> ())
+  (match run tx session with
+   | Ok () ->
+       Printf.printf "  ✓ All queries committed together\n";
 
-(* Example 6: Transaction with metadata *)
-let example_transaction_metadata session =
-  Printf.printf "\nExample 6: Transaction with metadata\n";
+       (* Verify and cleanup *)
+       let _ = Query_builder.execute_unit
+           (Query_builder.match_ (Printf.sprintf "(n:%s)" label)
+            |> Query_builder.detach_delete ["n"])
+           session in ()
+   | Error e -> Printf.eprintf "  ✗ Transaction failed: %s\n" (Error.to_string e))
 
-  let label = Printf.sprintf "MetaTest_%d" (Random.int 1000000) in
+(* Example 6: Explicit commit control *)
+let example_explicit_commit session =
+  Printf.printf "\nExample 6: Explicit COMMIT control\n";
 
-  (* Create metadata *)
-  let metadata = Value.StringMap.empty
-    |> Value.StringMap.add "app" (Value.Text "transaction_example")
-    |> Value.StringMap.add "version" (Value.Text "1.0") in
+  let label = Printf.sprintf "CommitTest_%d" (Random.int 1000000) in
+  let open Transaction_dsl in
 
-  match Session.begin_transaction session ~metadata () with
-  | Error e -> Printf.eprintf "  ✗ BEGIN with metadata failed: %s\n" (Error.to_string e)
-  | Ok () ->
-      Printf.printf "  ✓ Transaction begun with metadata\n";
+  let tx =
+    let* () = exec_query_builder_unit
+        (Query_builder.create_node (Printf.sprintf "(n:%s {value: 'test'})" label)) in
+    Printf.printf "  ✓ Node created\n";
 
-      (match Neo4j.query_ session
-         ~statement:(Printf.sprintf "CREATE (n:%s {value: 'meta'})" label)
-         () with
-       | Error e -> Printf.eprintf "  ✗ CREATE failed: %s\n" (Error.to_string e)
-       | Ok () ->
-           (match Session.commit session with
-            | Error e -> Printf.eprintf "  ✗ COMMIT failed: %s\n" (Error.to_string e)
-            | Ok () ->
-                Printf.printf "  ✓ Transaction with metadata committed\n";
-                (* Cleanup *)
-                let _ = Neo4j.query_ session
-                  ~statement:(Printf.sprintf "MATCH (n:%s) DELETE n" label)
-                  () in ()))
+    (* Explicitly commit *)
+    let* () = commit in
+    Printf.printf "  ✓ Explicitly committed\n";
+    return ()
+  in
+
+  (match run tx session with
+   | Ok () ->
+       Printf.printf "  ✓ Transaction completed\n";
+
+       (* Cleanup *)
+       let _ = Query_builder.execute_unit
+           (Query_builder.match_ (Printf.sprintf "(n:%s)" label)
+            |> Query_builder.delete ["n"])
+           session in ()
+   | Error e -> Printf.eprintf "  ✗ Error: %s\n" (Error.to_string e))
+
+(* Example 7: Conditional commit or rollback *)
+let example_conditional_commit session =
+  Printf.printf "\nExample 7: Conditional commit/rollback\n";
+
+  let label = Printf.sprintf "CondTest_%d" (Random.int 1000000) in
+  let open Transaction_dsl in
+
+  let test_scenario should_commit =
+    let tx =
+      let* () = exec_query_builder_unit
+          (Query_builder.create_node (Printf.sprintf "(n:%s {test: true})" label)) in
+      (* Decide based on condition *)
+      if should_commit then commit else rollback
+    in
+    run tx session
+  in
+
+  (* Test rollback scenario *)
+  (match test_scenario false with
+   | Ok () ->
+       Printf.printf "  ✓ Rollback scenario completed\n";
+
+       (* Verify node doesn't exist *)
+       let verify = let* records = exec_query_builder
+           (Query_builder.match_ (Printf.sprintf "(n:%s)" label)
+            |> Query_builder.return ["count(n) AS cnt"]) in
+         match records with
+         | [r] ->
+             (match Record.at_int r "cnt" with
+              | Ok 0L -> Printf.printf "  ✓ Node was rolled back\n"; return ()
+              | Ok n -> Printf.printf "  ✗ Expected 0 nodes, got %Ld\n" n; return ()
+              | Error _ -> return ())
+         | _ -> return ()
+       in
+       let _ = run verify session in ()
+   | Error e -> Printf.eprintf "  ✗ Error: %s\n" (Error.to_string e));
+
+  (* Test commit scenario *)
+  (match test_scenario true with
+   | Ok () ->
+       Printf.printf "  ✓ Commit scenario completed\n";
+
+       (* Cleanup *)
+       let _ = Query_builder.execute_unit
+           (Query_builder.match_ (Printf.sprintf "(n:%s)" label)
+            |> Query_builder.delete ["n"])
+           session in ()
+   | Error e -> Printf.eprintf "  ✗ Error: %s\n" (Error.to_string e))
+
+(* Example 8: Error recovery with catch *)
+let example_error_recovery session =
+  Printf.printf "\nExample 8: Error recovery with catch\n";
+
+  let label = Printf.sprintf "RecoveryTest_%d" (Random.int 1000000) in
+  let open Transaction_dsl in
+
+  let tx =
+    catch
+      (let* () = exec_query_builder_unit
+           (Query_builder.create_node (Printf.sprintf "(n:%s {value: 1})" label)) in
+       (* This will fail *)
+       exec_query_builder_unit (Query_builder.raw "INVALID SYNTAX"))
+      (fun _err ->
+         Printf.printf "  ✓ Caught error, creating fallback node\n";
+         (* Create fallback node instead *)
+         exec_query_builder_unit
+           (Query_builder.create_node (Printf.sprintf "(n:%s {value: 2, fallback: true})" label)))
+  in
+
+  (match run tx session with
+   | Ok () ->
+       Printf.printf "  ✓ Error recovery succeeded\n";
+
+       (* Cleanup *)
+       let _ = Query_builder.execute_unit
+           (Query_builder.match_ (Printf.sprintf "(n:%s)" label)
+            |> Query_builder.detach_delete ["n"])
+           session in ()
+   | Error e -> Printf.eprintf "  ✗ Failed: %s\n" (Error.to_string e))
 
 (* Main entry point *)
 let () =
@@ -272,17 +335,19 @@ let () =
   Eio_main.run @@ fun env ->
     let cfg = Config.of_env () in
 
-    Printf.printf "Transaction Patterns\n";
-    Printf.printf "====================\n\n";
+    Printf.printf "Transaction Patterns - BETTER_API Edition\n";
+    Printf.printf "==========================================\n\n";
 
     Eio.Switch.run @@ fun sw ->
       match Session.with_session ~sw ~net:env#net cfg (fun session ->
-        example_explicit_transaction session;
+        example_automatic_commit session;
         example_explicit_rollback session;
-        example_transact_helper session;
-        example_transact_rollback session;
+        example_dsl_auto_commit session;
+        example_auto_rollback_on_error session;
         example_multi_query_transaction session;
-        example_transaction_metadata session;
+        example_explicit_commit session;
+        example_conditional_commit session;
+        example_error_recovery session;
         Ok ()
       ) with
       | Ok () ->
