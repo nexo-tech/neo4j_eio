@@ -1,19 +1,17 @@
-{0 transactions}
+{0 Transactions (Session API)}
 
-{v
-# Transactions (Session API)
 
-This guide shows explicit transaction management using the `Session` API. It reflects the current implementation in `ocaml/src/session.ml`.
+This guide shows explicit transaction management using the [Session] API. It reflects the current implementation in [ocaml/src/session.ml].
 
 Key operations
-- `Session.begin_transaction : t -> (unit, Error.t) result`
-- `Session.commit : t -> (unit, Error.t) result`
-- `Session.rollback : t -> (unit, Error.t) result`
-- `Session.transact : t -> (t -> ('a, Error.t) result) -> ('a, Error.t) result` (functional helper)
+- [Session.begin_transaction : t -> (unit, Error.t) result]
+- [Session.commit : t -> (unit, Error.t) result]
+- [Session.rollback : t -> (unit, Error.t) result]
+- [Session.transact : t -> (t -> ('a, Error.t) result) -> ('a, Error.t) result] (functional helper)
 
 Explicit control
 
-```ocaml
+{[
 open Neo4j_eio
 
 Eio_main.run @@ fun env ->
@@ -36,25 +34,24 @@ Eio_main.run @@ fun env ->
     ) with
     | Ok () -> ()
     | Error e -> Printf.eprintf "tx failed: %s\n" (Error.to_string e)
-```
+]}
 
 Functional helper
-- `Session.transact s (fun s -> ...)` begins a transaction, runs your function, commits on `Ok` and rolls back on `Error`.
+- [Session.transact s (fun s -> ...)] begins a transaction, runs your function, commits on [Ok] and rolls back on [Error].
 
-```ocaml
+{[
 let result = Session.transact s (fun s ->
   match Query_builder.execute (Query_builder.raw "RETURN 1 AS ok") s with
   | Ok [r] -> (match Record.at_int r "ok" with Ok 1L -> Ok () | _ -> Error (Error.ClientError {code="Client.BadDecode"; message="expected 1"}))
   | Ok _ -> Error (Error.ClientError {code="Client.BadShape"; message="expected one row"})
   | Error e -> Error e)
-```
+]}
 
 Failure and reset behavior
-- Inside a transaction, automatic RESET on `FAILURE` is suppressed; call `Session.rollback` to clear failed state.
-- Outside a transaction, the driver auto‑issues RESET on `FAILURE`.
+- Inside a transaction, automatic RESET on [FAILURE] is suppressed; call [Session.rollback] to clear failed state.
+- Outside a transaction, the driver auto‑issues RESET on [FAILURE].
 
 Tips
 - Keep multi‑step mutations inside one transaction for atomicity.
 - For read‑only flows, you can skip explicit transactions unless you need snapshot semantics.
-- Prefer Query Builder + `Session.run_records` for named fields; decoding is simpler with `Record.at_*`.
-v}
+- Prefer Query Builder + [Session.run_records] for named fields; decoding is simpler with [Record.at_*].

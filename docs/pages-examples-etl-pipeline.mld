@@ -1,25 +1,23 @@
-{0 etl-pipeline}
+{0 ETL Pipeline Example}
 
-{v
-# ETL Pipeline Example
 
 This example demonstrates a practical Extract–Transform–Load (ETL) workflow using the current neo4j_eio API. We’ll stage raw order data, load it into a graph model, and optionally post‑process results using the Cypher fluent pipeline.
 
 Scenario
-- Raw orders with shape: `{user, item, qty, price}`
+- Raw orders with shape: [{user, item, qty, price}]
 - Target graph:
-  - `(:User {username, name})`
-  - `(:Item {sku, title})`
-  - `(:PURCHASE {qty, price, total})` relationships from User to Item
+  - [(:User {username, name})]
+  - [(:Item {sku, title})]
+  - [(:PURCHASE {qty, price, total})] relationships from User to Item
 
 APIs used
-- Query Builder: `Query_builder.raw`, `with_params`, `execute`, `execute_unit`
-- Record decoding: `Record.at_*`
+- Query Builder: [Query_builder.raw], [with_params], [execute], [execute_unit]
+- Record decoding: [Record.at_*]
 - Optional: Transaction DSL for atomic multi‑step ETL
-- Optional: Cypher pipeline (`Cypher`) for in‑memory transformations
+- Optional: Cypher pipeline ([Cypher]) for in‑memory transformations
 
 Stage raw data (label‑scoped)
-```ocaml
+{[
 open Neo4j_eio
 
 let stage_orders session label =
@@ -34,10 +32,10 @@ let stage_orders session label =
        MERGE (:RawOrder:%s {u: x.u, name: x.name, sku: x.sku, title: x.title, qty: x.qty, price: x.price})|}
        label))
     session
-```
+]}
 
 Load into target graph (all‑in‑Cypher)
-```ocaml
+{[
 let load_graph_all_in_cypher session label =
   Query_builder.execute_unit
     (Query_builder.raw (Printf.sprintf
@@ -51,10 +49,10 @@ let load_graph_all_in_cypher session label =
           ON MATCH  SET p.qty = p.qty + r.qty, p.total = p.total + (r.qty * r.price)|}
        label label label))
     session
-```
+]}
 
 Optional: OCaml transform with Cypher pipeline
-```ocaml
+{[
 (* Aggregate totals per (user, item), then apply writes row‑by‑row *)
 let aggregate_orders session label =
   let rows = Query_builder.execute
@@ -90,10 +88,10 @@ let aggregate_orders session label =
         | _ -> ()
       ) rows;
       Ok ()
-```
+]}
 
 End‑to‑end ETL (transactional)
-```ocaml
+{[
 open Transaction_dsl
 
 let etl_tx label =
@@ -140,10 +138,9 @@ let () =
       ) with
       | Ok () -> ()
       | Error e -> Printf.eprintf "Session error: %s\n" (Error.to_string e)
-```
+]}
 
 Tips
-- Keep data label‑scoped (e.g., `:RawOrder:ETL_123`) to simplify cleanup.
-- Prefer `MERGE` for idempotent loads; use `ON CREATE SET` and `ON MATCH SET` to manage upserts.
-- Use the fluent pipeline (`Cypher`) for complex in‑memory transforms; use Query Builder for writes.
-v}
+- Keep data label‑scoped (e.g., [:RawOrder:ETL_123]) to simplify cleanup.
+- Prefer [MERGE] for idempotent loads; use [ON CREATE SET] and [ON MATCH SET] to manage upserts.
+- Use the fluent pipeline ([Cypher]) for complex in‑memory transforms; use Query Builder for writes.

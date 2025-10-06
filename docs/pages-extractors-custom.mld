@@ -1,14 +1,12 @@
-{0 custom}
+{0 Custom Extractors}
 
-{v
-# Custom Extractors
 
-Build your own extractors to map Neo4j records into domain types with precise validation and helpful errors. This page shows patterns that match the current `Extract` and `Record` APIs.
+Build your own extractors to map Neo4j records into domain types with precise validation and helpful errors. This page shows patterns that match the current [Extract] and [Record] APIs.
 
-Use `Extract.field` with `Record.at_*`
-- `Extract.field key decoder` turns any `Record.at_*` function into an extractor component.
+Use [Extract.field] with [Record.at_*]
+- [Extract.field key decoder] turns any [Record.at_*] function into an extractor component.
 
-```ocaml
+{[
 open Neo4j_eio
 open Extract
 
@@ -19,30 +17,30 @@ let account_extractor =
   and+ name = field "name" Record.at_text
   and+ active = field "active" Record.at_bool in
   { id; name; active }
-```
+]}
 
 Decode lists with element decoders
-- Leverage `Record.at_list element_exact` via `Extract.list key element_exact`.
+- Leverage [Record.at_list element_exact] via [Extract.list key element_exact].
 
-```ocaml
+{[
 let tags_extractor = list "tags" Record.exact_text
-```
+]}
 
 Optional with defaults
-- Combine `maybe_*` and `default` for robust schemas.
+- Combine [maybe_*] and [default] for robust schemas.
 
-```ocaml
+{[
 let person_extractor =
   let+ name = text "name"
   and+ age = int "age"
   and+ email = (maybe_text "email" >>| Option.value ~default:"-") in
   (name, age, email)
-```
+]}
 
 Map to domain types
-- Map from `Value` shapes to your types once, then reuse.
+- Map from [Value] shapes to your types once, then reuse.
 
-```ocaml
+{[
 module Domain = struct
   type point = { x: float; y: float }
 end
@@ -50,25 +48,24 @@ end
 let point_extractor =
   let+ p = point2d "pt" in
   { Domain.x = p.x; y = p.y }
-```
+]}
 
 Pipeline integration (fluent Cypher)
-- When using the `Cypher` fluent API, prefer `Cypher.extract extractor query` to apply an `Extract.t` to each record; decode errors are surfaced as `Error.ClientError` with a helpful message.
+- When using the [Cypher] fluent API, prefer [Cypher.extract extractor query] to apply an [Extract.t] to each record; decode errors are surfaced as [Error.ClientError] with a helpful message.
 
-```ocaml
+{[
 let query =
   Cypher.query "RETURN 1 AS id, 'alice' AS name"
   |> Cypher.extract Extract.(
        let+ id = int "id"
        and+ name = text "name" in
        (id, name))
-```
+]}
 
 Error reporting
-- `Extract.run` returns `('a, Record.decode_error) result`. Pretty‑print with `Record.pp_decode_error` for actionable messages.
+- [Extract.run] returns [('a, Record.decode_error) result]. Pretty‑print with [Record.pp_decode_error] for actionable messages.
 
 Best practices
-- Always alias fields in `RETURN` for stable keys.
+- Always alias fields in [RETURN] for stable keys.
 - Keep extractors near their query definitions for locality, or centralize in a module when used across queries.
 - Compose small extractors; avoid monolithic decoders.
-v}

@@ -1,30 +1,28 @@
-{0 user-management}
+{0 User Management System Example}
 
-{v
-# User Management System Example
 
 This end-to-end example demonstrates a small user management workflow using the current neo4j_eio API: creating users, assigning roles, adding friendships, querying profiles, and doing all operations transactionally when needed.
 
 Key APIs used
-- Session lifecycle: `Session.with_session ~sw ~net cfg (fun s -> ...)`
-- Query Builder: `Query_builder.raw`, `with_params`, `execute`, `execute_unit`
-- Transaction DSL: `Transaction_dsl.(let*, let+, and+, run, exec_query_builder, exec_query_builder_unit, catch)`
-- Record decoding: `Record.at_text`, `Record.at_int`, `Record.at_list`, etc.
+- Session lifecycle: [Session.with_session ~sw ~net cfg (fun s -> ...)]
+- Query Builder: [Query_builder.raw], [with_params], [execute], [execute_unit]
+- Transaction DSL: [Transaction_dsl.(let*, let+, and+, run, exec_query_builder, exec_query_builder_unit, catch)]
+- Record decoding: [Record.at_text], [Record.at_int], [Record.at_list], etc.
 
 Schema (labels/relationships)
-- Nodes: `(:User {username, name, email, createdAt})`, `(:Role {name})`
-- Relationships: `(:User)-[:HAS_ROLE]->(:Role)`, `(:User)-[:FRIEND_WITH]->(:User)` (undirected semantics modeled as two directed relationships or handled symmetrically in queries)
+- Nodes: [(:User {username, name, email, createdAt})], [(:Role {name})]
+- Relationships: [(:User)-[:HAS_ROLE]->(:Role)], [(:User)-[:FRIEND_WITH]->(:User)] (undirected semantics modeled as two directed relationships or handled symmetrically in queries)
 
 Bootstrap roles
-```ocaml
+{[
 let bootstrap_roles session =
   Query_builder.execute_unit
     (Query_builder.raw "UNWIND ['admin','editor','viewer'] AS r MERGE (:Role {name: r})")
     session
-```
+]}
 
 Create user (idempotent with MERGE)
-```ocaml
+{[
 let create_user session ~username ~name ~email =
   Query_builder.execute
     (Query_builder.raw
@@ -37,10 +35,10 @@ let create_user session ~username ~name ~email =
           ("email", Value.Text email);
         ])
     session
-```
+]}
 
 Assign role to user
-```ocaml
+{[
 let assign_role session ~username ~role =
   Query_builder.execute_unit
     (Query_builder.raw
@@ -51,10 +49,10 @@ let assign_role session ~username ~role =
           ("role", Value.Text role);
         ])
     session
-```
+]}
 
 Add friendship (symmetric)
-```ocaml
+{[
 let add_friendship session ~a ~b =
   Query_builder.execute_unit
     (Query_builder.raw
@@ -63,10 +61,10 @@ let add_friendship session ~a ~b =
         MERGE (b)-[:FRIEND_WITH]->(a)|}
      |> Query_builder.with_params [ ("a", Value.Text a); ("b", Value.Text b) ])
     session
-```
+]}
 
 Fetch profile with roles and friends
-```ocaml
+{[
 let fetch_profile session ~username =
   Query_builder.execute
     (Query_builder.raw
@@ -78,10 +76,10 @@ let fetch_profile session ~username =
                collect(DISTINCT f.username) AS friends|}
      |> Query_builder.with_param ("username", Value.Text username))
     session
-```
+]}
 
 Transactional registration flow
-```ocaml
+{[
 open Transaction_dsl
 
 let register_user_tx ~username ~name ~email ~role =
@@ -107,10 +105,10 @@ let register_user_tx ~username ~name ~email ~role =
     return ()
   in
   tx
-```
+]}
 
 Putting it together
-```ocaml
+{[
 let () =
   Eio_main.run @@ fun env ->
     let cfg = Config.of_env () in
@@ -150,19 +148,18 @@ let () =
       ) with
       | Ok () -> ()
       | Error e -> Printf.eprintf "Session error: %s\n" (Error.to_string e)
-```
+]}
 
 Cleanup helpers
-```ocaml
+{[
 let cleanup_by_label session label =
   Query_builder.execute_unit
     (Query_builder.raw (Printf.sprintf "MATCH (n:%s) DETACH DELETE n" label))
     session
-```
+]}
 
 Notes
-- Use `MERGE` to keep operations idempotent during bootstrap and registration.
-- Always alias return fields (`AS name`, `AS email`) to get stable keys.
-- Prefer `Transaction_dsl` for multi-step flows to ensure commit/rollback semantics.
+- Use [MERGE] to keep operations idempotent during bootstrap and registration.
+- Always alias return fields ([AS name], [AS email]) to get stable keys.
+- Prefer [Transaction_dsl] for multi-step flows to ensure commit/rollback semantics.
 - For undirected friendships, enforce symmetry in writes or use a single directed relationship and account for both directions in queries.
-v}

@@ -1,32 +1,29 @@
-{0 extract}
+{0 Extract Module Reference}
 
-{v
-# Extract Module Reference
 
-Monadic/applicative extractors for decoding `Record.t` (see ocaml/src/extract.mli).
+Monadic/applicative extractors for decoding [Record.t] (see ocaml/src/extract.mli).
 
 Core
-- `'a t` — extractor type
-- Monad/Functor/App: `return`, `fail`, `bind` (`let*`), `let+`, `and+`
+- ['a t] — extractor type
+- Monad/Functor/App: [return], [fail], [bind] ([let*]), [let+], [and+]
 
 Field extractors
-- `field key decoder` where decoder is a `Record.at_*`
-- Shortcuts: `text, int, int_as_int, bool, float, bytes, node, relationship, unbound_relationship, path, point2d, point3d, duration, date, local_time, time, local_datetime, datetime_zone_id, datetime_offset, value`
-- Collections/maps: `list key element_exact`, `map_field`
+- [field key decoder] where decoder is a [Record.at_*]
+- Shortcuts: [text, int, int_as_int, bool, float, bytes, node, relationship, unbound_relationship, path, point2d, point3d, duration, date, local_time, time, local_datetime, datetime_zone_id, datetime_offset, value]
+- Collections/maps: [list key element_exact], [map_field]
 
 Optional
-- `optional e` → `'a option t` (None when key missing)
-- `default v e`, `maybe key maybe_at_*`, `maybe_text/int/bool/float/node/relationship/path`
+- [optional e] → ['a option t] (None when key missing)
+- [default v e], [maybe key maybe_at_*], [maybe_text/int/bool/float/node/relationship/path]
 
 Combinators
-- `both`, `sequence`, `all`
+- [both], [sequence], [all]
 
 Execution
-- `run : 'a t -> Record.t -> ('a, Record.decode_error) result`
-- `run_exn : 'a t -> Record.t -> 'a`
+- [run : 'a t -> Record.t -> ('a, Record.decode_error) result]
+- [run_exn : 'a t -> Record.t -> 'a]
 
 Composite helpers
-- `pair`, `triple`, `text_int`, `text_list`, `int_list`
-- Node: `node_props`, `node_labels`, `node_id`
-- Relationship: `rel_type`, `rel_props`, `rel_id`
-v}
+- [pair], [triple], [text_int], [text_list], [int_list]
+- Node: [node_props], [node_labels], [node_id]
+- Relationship: [rel_type], [rel_props], [rel_id]

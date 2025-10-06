@@ -1,18 +1,16 @@
-{0 quickstart}
+{0 Quick Start}
 
-{v
-# Quick Start
 
 This quick start gets you from zero to your first query using the real API used throughout the codebase and examples.
 
 Prerequisites
 - Follow Installation to set up OCaml, dependencies, and start Neo4j.
-- Ensure env vars are set, or rely on defaults from `Config.of_env ()`.
+- Ensure env vars are set, or rely on defaults from [Config.of_env ()].
 
 Minimal program
 Creates a label-scoped person, fetches it, prints results, and cleans up.
 
-```ocaml
+{[
 open Neo4j_eio
 
 let () =
@@ -48,35 +46,34 @@ let () =
       ) with
       | Ok () -> ()
       | Error e -> Printf.eprintf "Session failed: %s\n" (Error.to_string e)
-```
+]}
 
-Run it (from `ocaml/`):
-- Save as `quickstart.ml`
+Run it (from [ocaml/]):
+- Save as [quickstart.ml]
 - Add a simple dune file (or use examples as reference):
 
-```
+]}
 (executable
  (name quickstart)
  (modules quickstart)
  (libraries neo4j_eio eio eio_main))
-```
+]}
 
-- Build and run: `dune exec quickstart.exe`
+- Build and run: [dune exec quickstart.exe]
 
 Parameters and safety
-- Build parameters with `Query_builder.with_params`:
+- Build parameters with [Query_builder.with_params]:
 
-```ocaml
+{[
 let res = Query_builder.execute
   (Query_builder.raw "RETURN $x + 1 AS y"
    |> Query_builder.with_params ["x", Value.Int 41L])
   session
-```
+]}
 
-- Decode fields with `Record.at_*` accessors for precise typing (`at_text`, `at_int`, `at_bool`, etc.).
+- Decode fields with [Record.at_*] accessors for precise typing ([at_text], [at_int], [at_bool], etc.).
 
 Streaming and transactions (pointers)
-- For large results, use `Session.run_stream` or `Session.run_stream_records` and `stream_to_list`/`record_stream_to_list`.
-- For multi-step logic and robust error handling, see the Transaction DSL in examples (`ocaml/examples/simple_queries.ml`).
+- For large results, use [Session.run_stream] or [Session.run_stream_records] and [stream_to_list]/[record_stream_to_list].
+- For multi-step logic and robust error handling, see the Transaction DSL in examples ([ocaml/examples/simple_queries.ml]).
 
-v}

@@ -1,12 +1,10 @@
-{0 limitations}
+{0 Known Limitations}
 
-{v
-# Known Limitations
 
 These are current limitations of the driver as implemented in ocaml/src.
 
 TLS and remote hosts
-- The `Session` connection path does not enable TLS and connects to loopback (127.0.0.1), ignoring host in the URI. Use local Neo4j or a tunnel. TLS enablement and proper host use are planned.
+- The [Session] connection path does not enable TLS and connects to loopback (127.0.0.1), ignoring host in the URI. Use local Neo4j or a tunnel. TLS enablement and proper host use are planned.
 
 One request per session
 - A session serializes requests with a mutex. For parallelism, create multiple sessions (or an application‑level pool).
@@ -15,8 +13,7 @@ No built‑in pooling
 - There is no built‑in connection/session pool; use a simple semaphore‑based pool at the application level.
 
 Field names and unlabeled expressions
-- If you don’t alias fields (`AS name`), decoding by key becomes fragile. Always alias to ensure stable keys.
+- If you don’t alias fields ([AS name]), decoding by key becomes fragile. Always alias to ensure stable keys.
 
 Retry policies
-- The driver does not include built‑in retry logic. Implement application‑level retries for `Error.Transient` as needed.
-v}
+- The driver does not include built‑in retry logic. Implement application‑level retries for [Error.Transient] as needed.

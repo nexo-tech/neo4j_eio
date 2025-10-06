@@ -1,21 +1,19 @@
-{0 social-network}
+{0 Social Network Example}
 
-{v
-# Social Network Example
 
 This example models a small social network and demonstrates practical queries for recommendations, mutual friends, and paths between users using the current API.
 
 Core entities and relationships
-- Nodes: `(:User {username, name})`
-- Relationships: `(:User)-[:FRIEND_WITH]->(:User)` (stored in both directions for symmetry)
+- Nodes: [(:User {username, name})]
+- Relationships: [(:User)-[:FRIEND_WITH]->(:User)] (stored in both directions for symmetry)
 
 Utilities
-- Uses Query Builder (`Query_builder.raw`, `with_params`, `execute`, `execute_unit`)
-- Uses Record decoders (`Record.at_text`, `Record.at_int`, `Record.at_list Record.exact_text`)
+- Uses Query Builder ([Query_builder.raw], [with_params], [execute], [execute_unit])
+- Uses Record decoders ([Record.at_text], [Record.at_int], [Record.at_list Record.exact_text])
 - Optional: Transaction DSL for multi-step initialization
 
 Bootstrap sample graph
-```ocaml
+{[
 open Neo4j_eio
 
 let bootstrap_graph session label =
@@ -46,10 +44,10 @@ MERGE (b)-[:FRIEND_WITH]->(a)|}
   let _ = Query_builder.execute_unit (mk "bob" "dave") session in
   let _ = Query_builder.execute_unit (mk "carol" "erin") session in
   Ok ()
-```
+]}
 
 Friend recommendations (friends-of-friends not already friends)
-```ocaml
+{[
 let recommend_friends session label ~for_user ~limit =
   Query_builder.execute
     (Query_builder.raw (Printf.sprintf
@@ -64,10 +62,10 @@ let recommend_friends session label ~for_user ~limit =
           ("k", Value.Int (Int64.of_int limit));
         ])
     session
-```
+]}
 
 Mutual friends between two users
-```ocaml
+{[
 let mutual_friends session label ~a ~b =
   Query_builder.execute
     (Query_builder.raw (Printf.sprintf
@@ -77,10 +75,10 @@ let mutual_friends session label ~a ~b =
        label label label)
      |> Query_builder.with_params [ ("a", Value.Text a); ("b", Value.Text b) ])
     session
-```
+]}
 
 Shortest social path (degrees of separation)
-```ocaml
+{[
 let degrees_of_separation session label ~a ~b =
   Query_builder.execute
     (Query_builder.raw (Printf.sprintf
@@ -90,10 +88,10 @@ let degrees_of_separation session label ~a ~b =
        label label)
      |> Query_builder.with_params [ ("a", Value.Text a); ("b", Value.Text b) ])
     session
-```
+]}
 
 Putting it together
-```ocaml
+{[
 let () =
   Eio_main.run @@ fun env ->
     let cfg = Config.of_env () in
@@ -139,10 +137,9 @@ let () =
       ) with
       | Ok () -> ()
       | Error e -> Printf.eprintf "Session error: %s\n" (Error.to_string e)
-```
+]}
 
 Notes
-- Store `FRIEND_WITH` both ways (two directed relationships) for simple undirected semantics in Cypher.
-- Use label-scoped data (e.g., `:%s`) to keep examples isolated and cleanup easy.
-- Always alias projected fields (e.g., `AS user`, `AS score`) for stable decoding keys.
-v}
+- Store [FRIEND_WITH] both ways (two directed relationships) for simple undirected semantics in Cypher.
+- Use label-scoped data (e.g., [:%s]) to keep examples isolated and cleanup easy.
+- Always alias projected fields (e.g., [AS user], [AS score]) for stable decoding keys.

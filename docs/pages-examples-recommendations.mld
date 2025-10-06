@@ -1,21 +1,19 @@
-{0 recommendations}
+{0 Recommendation Engine Example}
 
-{v
-# Recommendation Engine Example
 
 This example shows practical recommendation patterns using the current API. We’ll model users purchasing items and generate recommendations using popularity and simple collaborative filtering.
 
 Data model
-- Nodes: `(:User {username, name})`, `(:Item {sku, title, tags})`
-- Relationships: `(:User)-[:PURCHASED]->(:Item)`
+- Nodes: [(:User {username, name})], [(:Item {sku, title, tags})]
+- Relationships: [(:User)-[:PURCHASED]->(:Item)]
 
 APIs used
-- Query Builder: `Query_builder.raw`, `with_params`, `execute`, `execute_unit`
-- Record decoding: `Record.at_text`, `Record.at_int`, `Record.at_list Record.exact_text`
-- Optional pipeline post‑processing via `Cypher` (map/sort)
+- Query Builder: [Query_builder.raw], [with_params], [execute], [execute_unit]
+- Record decoding: [Record.at_text], [Record.at_int], [Record.at_list Record.exact_text]
+- Optional pipeline post‑processing via [Cypher] (map/sort)
 
 Bootstrap sample data
-```ocaml
+{[
 open Neo4j_eio
 
 let bootstrap_data session label =
@@ -58,10 +56,10 @@ let bootstrap_data session label =
   let _ = Query_builder.execute_unit (mk "dave"  "C") session in
   let _ = Query_builder.execute_unit (mk "dave"  "E") session in
   Ok ()
-```
+]}
 
 Popularity‑based recommendations (items the user doesn’t own)
-```ocaml
+{[
 let recommend_popular session label ~for_user ~limit =
   Query_builder.execute
     (Query_builder.raw (Printf.sprintf
@@ -77,10 +75,10 @@ let recommend_popular session label ~for_user ~limit =
           ("k", Value.Int (Int64.of_int limit));
         ])
     session
-```
+]}
 
 Collaborative filtering (users with shared purchases)
-```ocaml
+{[
 let recommend_similar_users session label ~for_user ~limit =
   Query_builder.execute
     (Query_builder.raw (Printf.sprintf
@@ -97,10 +95,10 @@ let recommend_similar_users session label ~for_user ~limit =
           ("k", Value.Int (Int64.of_int limit));
         ])
     session
-```
+]}
 
 Content‑based (shared tags)
-```ocaml
+{[
 let recommend_by_tags session label ~for_user ~limit =
   Query_builder.execute
     (Query_builder.raw (Printf.sprintf
@@ -116,10 +114,10 @@ let recommend_by_tags session label ~for_user ~limit =
           ("k", Value.Int (Int64.of_int limit));
         ])
     session
-```
+]}
 
 Putting it together
-```ocaml
+{[
 let () =
   Eio_main.run @@ fun env ->
     let cfg = Config.of_env () in
@@ -160,13 +158,12 @@ let () =
       ) with
       | Ok () -> ()
       | Error e -> Printf.eprintf "Session error: %s\n" (Error.to_string e)
-```
+]}
 
 Decoding
-- Fields returned are aliased (`sku`, `title`, `score`) and decoded with `Record.at_text`/`Record.at_int`.
+- Fields returned are aliased ([sku], [title], [score]) and decoded with [Record.at_text]/[Record.at_int].
 
 Tips
 - Keep examples label‑scoped for isolation and cleanup.
 - Tune scoring and WHERE clauses for your domain; the examples use simple overlap‑based scoring.
-- For larger datasets, consider using streaming APIs and post‑processing with `Cypher` transformations.
-v}
+- For larger datasets, consider using streaming APIs and post‑processing with [Cypher] transformations.

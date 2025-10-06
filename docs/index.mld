@@ -2,6 +2,48 @@
 
 neo4j_eio is a modern, effects-based Neo4j driver for OCaml 5+. It implements the Bolt protocol and uses Eio for safe, concurrent I/O. The library focuses on type safety, predictable errors, and approachable APIs for both simple queries and advanced graph workflows.
 
+{1 Documentation}
+
+{2 Quick Start Guides}
+- {{!page-"pages-introduction"}Introduction}
+- {{!page-"pages-installation"}Installation}
+- {{!page-"pages-quickstart"}Quick Start}
+- {{!page-"pages-configuration"}Configuration}
+
+{2 Core Concepts}
+- {{!page-"pages-core-concepts-sessions"}Sessions and Connections}
+- {{!page-"pages-core-concepts-queries"}Query Execution}
+- {{!page-"pages-core-concepts-values"}Values}
+- {{!page-"pages-core-concepts-records"}Records and Extraction}
+- {{!page-"pages-core-concepts-errors"}Errors}
+
+{2 Query Building}
+- {{!page-"pages-query-building-query-builder"}Query Builder DSL}
+- {{!page-"pages-query-building-parameters"}Parameters}
+- {{!page-"pages-query-building-programmatic"}Programmatic Building}
+- {{!page-"pages-query-building-patterns"}Common Patterns}
+
+{2 Advanced Topics}
+- {{!page-"pages-advanced-transactions"}Transactions}
+- {{!page-"pages-advanced-tx-dsl"}Transaction DSL}
+- {{!page-"pages-advanced-streaming"}Streaming}
+- {{!page-"pages-advanced-concurrency"}Concurrency}
+- {{!page-"pages-advanced-pooling"}Pooling}
+
+{2 Feature Guides}
+- {{!page-"pipelines"}Cypher Pipelines}
+- {{!page-"extractors"}Data Extractors}
+- {{!page-"transactions"}Transactions Guide}
+- {{!page-"streaming"}Streaming Guide}
+- {{!page-"best-practices"}Best Practices}
+
+{2 Examples}
+- {{!page-"pages-examples-user-management"}User Management}
+- {{!page-"pages-examples-social-network"}Social Network}
+- {{!page-"pages-examples-recommendations"}Recommendations}
+- {{!page-"pages-examples-etl-pipeline"}ETL Pipeline}
+- {{!page-"pages-examples-analytics"}Graph Analytics}
+
 {1 Features}
 
 - Eio-first design: safe concurrency, no blocking Unix calls in library code
@@ -92,7 +134,9 @@ let cfg = Config.{
 }
 ]}
 
-{1 Core Modules}
+{1 API Reference}
+
+The complete API documentation is available through the module index. Key modules:
 
 {!modules:
 Neo4j_eio.Config
@@ -104,17 +148,6 @@ Neo4j_eio.Query_builder
 Neo4j_eio.Transaction_dsl
 Neo4j_eio.Extract
 Neo4j_eio.Cypher
-}
-
-{1 Advanced Modules}
-
-{!modules:
-Neo4j_eio.Lens
-Neo4j_eio.Traversal
-Neo4j_eio.Result_ops
-Neo4j_eio.Protocol
-Neo4j_eio.Connection
-Neo4j_eio.Packstream
 }
 
 {1 Examples}
@@ -176,57 +209,6 @@ let transfer_funds session from_id to_id amount =
   in
   Session.transact session tx
 ]}
-
-{1 Documentation}
-
-{2 Quick Start Guides}
-- {{!page-"pages-introduction"}Introduction}
-- {{!page-"pages-installation"}Installation}
-- {{!page-"pages-quickstart"}Quick Start}
-- {{!page-"pages-configuration"}Configuration}
-
-{2 Core Concepts}
-- {{!page-"pages-core-concepts-sessions"}Sessions and Connections}
-- {{!page-"pages-core-concepts-queries"}Query Execution}
-- {{!page-"pages-core-concepts-values"}Values}
-- {{!page-"pages-core-concepts-records"}Records and Extraction}
-- {{!page-"pages-core-concepts-errors"}Errors}
-
-{2 Query Building}
-- {{!page-"pages-query-building-query-builder"}Query Builder DSL}
-- {{!page-"pages-query-building-parameters"}Parameters}
-- {{!page-"pages-query-building-programmatic"}Programmatic Building}
-- {{!page-"pages-query-building-patterns"}Common Patterns}
-
-{2 Advanced Topics}
-- {{!page-"pages-advanced-transactions"}Transactions}
-- {{!page-"pages-advanced-tx-dsl"}Transaction DSL}
-- {{!page-"pages-advanced-streaming"}Streaming}
-- {{!page-"pages-advanced-concurrency"}Concurrency}
-- {{!page-"pages-advanced-pooling"}Pooling}
-
-{2 Feature Guides}
-- {{!page-"pipelines"}Cypher Pipelines}
-- {{!page-"extractors"}Data Extractors}
-- {{!page-"transactions"}Transactions Guide}
-- {{!page-"streaming"}Streaming Guide}
-- {{!page-"best-practices"}Best Practices}
-
-{2 Examples}
-- {{!page-"pages-examples-user-management"}User Management}
-- {{!page-"pages-examples-social-network"}Social Network}
-- {{!page-"pages-examples-recommendations"}Recommendations}
-- {{!page-"pages-examples-etl-pipeline"}ETL Pipeline}
-- {{!page-"pages-examples-analytics"}Graph Analytics}
-
-{2 API Reference}
-- {!Neo4j_eio} - Main library module
-- {{!page-"pages-api-reference-value"}Value API}
-- {{!page-"pages-api-reference-record"}Record API}
-- {{!page-"pages-api-reference-extract"}Extract API}
-- {{!page-"pages-api-reference-query-builder"}Query Builder API}
-- {{!page-"pages-api-reference-transaction-dsl"}Transaction DSL API}
-- {{!page-"pages-api-reference-pipeline"}Cypher Pipeline API}
 
 {2 Troubleshooting}
 - {{!page-"pages-troubleshooting-common-errors"}Common Errors}

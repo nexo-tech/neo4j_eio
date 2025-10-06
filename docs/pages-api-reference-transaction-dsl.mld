@@ -1,32 +1,29 @@
-{0 transaction-dsl}
+{0 Transaction_dsl Module Reference}
 
-{v
-# Transaction_dsl Module Reference
 
 Composable transaction workflows (see ocaml/src/transaction_dsl.mli).
 
 Core
-- `'a t`
-- `return : 'a -> 'a t`, `fail : Error.t -> 'a t`
-- `bind` (`let*`), `let+`, `and+`
+- ['a t]
+- [return : 'a -> 'a t], [fail : Error.t -> 'a t]
+- [bind] ([let*]), [let+], [and+]
 
 Execute queries
-- `exec_cypher : 'a Cypher.t -> 'a t`
-- `exec_query_builder : Query_builder.t -> Record.t list t`
-- `exec_query_builder_unit : Query_builder.t -> unit t`
+- [exec_cypher : 'a Cypher.t -> 'a t]
+- [exec_query_builder : Query_builder.t -> Record.t list t]
+- [exec_query_builder_unit : Query_builder.t -> unit t]
 
 Control
-- `commit : unit t`, `rollback : unit t`
-- `when_ : bool -> unit t -> unit t`, `unless : bool -> unit t -> unit t`
-- `sequence : 'a t list -> 'a list t`, `sequence_ : unit t list -> unit t`
-- `iter : ('a -> unit t) -> 'a list -> unit t`, `map : ('a -> 'b t) -> 'a list -> 'b list t`
+- [commit : unit t], [rollback : unit t]
+- [when_ : bool -> unit t -> unit t], [unless : bool -> unit t -> unit t]
+- [sequence : 'a t list -> 'a list t], [sequence_ : unit t list -> unit t]
+- [iter : ('a -> unit t) -> 'a list -> unit t], [map : ('a -> 'b t) -> 'a list -> 'b list t]
 
 Errors
-- `catch : 'a t -> (Error.t -> 'a t) -> 'a t`
-- `try_with : 'a t -> on_error:'a t -> 'a t`
+- [catch : 'a t -> (Error.t -> 'a t) -> 'a t]
+- [try_with : 'a t -> on_error:'a t -> 'a t]
 
 Run
-- `run : 'a t -> Session.t -> ('a, Error.t) result`
-- `run_exn : 'a t -> Session.t -> 'a`
-- `get_session : Session.t t`, `lift_result : ('a, Error.t) result -> 'a t`
-v}
+- [run : 'a t -> Session.t -> ('a, Error.t) result]
+- [run_exn : 'a t -> Session.t -> 'a]
+- [get_session : Session.t t], [lift_result : ('a, Error.t) result -> 'a t]

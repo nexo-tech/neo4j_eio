@@ -1,49 +1,47 @@
-{0 query-builder}
+{0 Query Builder DSL}
 
-{v
-# Query Builder DSL
 
-The Query Builder provides a fluent, composable way to construct Cypher queries as plain strings plus a separate parameter list. It mirrors the API in `ocaml/src/query_builder.{mli,ml}` and integrates with `Cypher` and `Session` for execution.
+The Query Builder provides a fluent, composable way to construct Cypher queries as plain strings plus a separate parameter list. It mirrors the API in [ocaml/src/query_builder.{mli,ml}] and integrates with [Cypher] and [Session] for execution.
 
 Core idea
 - Build a query by chaining clause builders, then either:
-  - Execute via `Query_builder.execute` / `execute_unit`, or
-  - Inspect the generated string using `build` / `to_string` and parameters via `build_with_params`.
+  - Execute via [Query_builder.execute] / [execute_unit], or
+  - Inspect the generated string using [build] / [to_string] and parameters via [build_with_params].
 
 Hello builder
-```ocaml
+{[
 (* RETURN with aliases *)
 let res = Query_builder.execute
   (Query_builder.raw "RETURN 1 AS num, 'hello' AS text")
   session
-```
+]}
 
 Common clauses
 - Start:
-  - `raw "..."`
-  - `match_ "(p:Person)"`
-  - `optional_match "(p)-[:KNOWS]->(f)"`
-  - `create_node "(p:Person {name: 'Alice'})"`
-  - `merge "(p:Person {id: $id})"`
-  - `unwind "range(1,10)" "n"`  → `UNWIND range(1,10) AS n`
+  - [raw "..."]
+  - [match_ "(p:Person)"]
+  - [optional_match "(p)-[:KNOWS]->(f)"]
+  - [create_node "(p:Person {name: 'Alice'})"]
+  - [merge "(p:Person {id: $id})"]
+  - [unwind "range(1,10)" "n"]  → [UNWIND range(1,10) AS n]
 - Filter:
-  - `where "p.age >= 21"`
-  - `and_where "p.active = true"`
-  - `or_where "p.vip = true"`
+  - [where "p.age >= 21"]
+  - [and_where "p.active = true"]
+  - [or_where "p.vip = true"]
 - Projection:
-  - `return ["p.name AS name"; "p.age AS age"]`
-  - `return_distinct ["p.city AS city"]`
-  - `with_ ["p", "count(f) AS degree"]`
+  - [return ["p.name AS name"; "p.age AS age"]]
+  - [return_distinct ["p.city AS city"]]
+  - [with_ ["p", "count(f) AS degree"]]
 - Ordering and limits:
-  - `order_by "p.age"` / `order_by_desc "p.age"`
-  - `limit 10`, `skip 5`
+  - [order_by "p.age"] / [order_by_desc "p.age"]
+  - [limit 10], [skip 5]
 - Mutations:
-  - `create "(p)-[:KNOWS]->(f)"`
-  - `set ["p.age = 30"; "p.active = true"]`
-  - `delete ["p"]` / `detach_delete ["p"]`
+  - [create "(p)-[:KNOWS]->(f)"]
+  - [set ["p.age = 30"; "p.active = true"]]
+  - [delete ["p"]] / [detach_delete ["p"]]
 
 Example: query pipeline
-```ocaml
+{[
 let q =
   Query_builder.match_ "(p:Person)"
   |> Query_builder.where "p.age >= $min"
@@ -57,30 +55,29 @@ let q =
      ]
 
 let res = Query_builder.execute q session
-```
+]}
 
 Convenience constructors
-- `select fields pattern` — alias for `match_ pattern` (the `fields` argument is ignored; use `return` to project)
-- `insert pattern props` — `create_node pattern` then `with_params props`
-- `update pattern set_clause` — `match_ pattern` then `set set_clause`
-- `remove pattern` — `match_ pattern` then `detach_delete [pattern]`
+- [select fields pattern] — alias for [match_ pattern] (the [fields] argument is ignored; use [return] to project)
+- [insert pattern props] — [create_node pattern] then [with_params props]
+- [update pattern set_clause] — [match_ pattern] then [set set_clause]
+- [remove pattern] — [match_ pattern] then [detach_delete [pattern]]
 
 Execution helpers
-- `execute : t -> Session.t -> (Record.t list, Error.t) result`
-- `execute_unit : t -> Session.t -> (unit, Error.t) result`
+- [execute : t -> Session.t -> (Record.t list, Error.t) result]
+- [execute_unit : t -> Session.t -> (unit, Error.t) result]
 
 Introspection
-- `build : t -> string` returns the Cypher string with placeholders
-- `build_with_params : t -> string * (string * Value.value) list`
-- `to_string : t -> string` is an alias of `build`
+- [build : t -> string] returns the Cypher string with placeholders
+- [build_with_params : t -> string * (string * Value.value) list]
+- [to_string : t -> string] is an alias of [build]
 
 Notes and limitations
-- The builder is a thin DSL that concatenates raw clause strings. It does not escape identifiers or stringify parameters; parameters are passed separately as `Value.value`s.
-- Clause strings (patterns, assignments, conditions) are used verbatim. Prefer parameters (`$param`) instead of interpolating values into strings.
-- Ordering of clauses is preserved in the order you chain them; `and_where` and `or_where` operate on the most recent `WHERE`.
-- `order_by`/`order_by_desc` accumulate multiple sort keys in order.
+- The builder is a thin DSL that concatenates raw clause strings. It does not escape identifiers or stringify parameters; parameters are passed separately as [Value.value]s.
+- Clause strings (patterns, assignments, conditions) are used verbatim. Prefer parameters ([$param]) instead of interpolating values into strings.
+- Ordering of clauses is preserved in the order you chain them; [and_where] and [or_where] operate on the most recent [WHERE].
+- [order_by]/[order_by_desc] accumulate multiple sort keys in order.
 
 Working with sessions and transactions
-- `execute`/`execute_unit` run the built Cypher against a given `Session`. They can be used inside or outside transactions.
-- With the Transaction DSL, call `Transaction_dsl.exec_query_builder` or `exec_query_builder_unit` to compose multiple builder operations atomically.
-v}
+- [execute]/[execute_unit] run the built Cypher against a given [Session]. They can be used inside or outside transactions.
+- With the Transaction DSL, call [Transaction_dsl.exec_query_builder] or [exec_query_builder_unit] to compose multiple builder operations atomically.

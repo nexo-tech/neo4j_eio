@@ -1,12 +1,10 @@
-{0 nodes}
+{0 Working With Nodes}
 
-{v
-# Working With Nodes
 
-This guide covers creating, reading, updating, and deleting nodes using the Query Builder and Cypher pipeline, and decoding node values using Record, Extract, and Lens. All examples use the current API in `ocaml/src`.
+This guide covers creating, reading, updating, and deleting nodes using the Query Builder and Cypher pipeline, and decoding node values using Record, Extract, and Lens. All examples use the current API in [ocaml/src].
 
 Create nodes
-```ocaml
+{[
 let label = Printf.sprintf "Person_%d" (Random.int 1_000_000) in
 let _ = Query_builder.execute
   (Query_builder.raw (Printf.sprintf
@@ -14,18 +12,18 @@ let _ = Query_builder.execute
      label)
    |> Query_builder.with_params [ ("name", Value.Text "Alice"); ("age", Value.Int 30L) ])
   session
-```
+]}
 
 Read nodes (basic)
-```ocaml
+{[
 let res = Query_builder.execute
   (Query_builder.raw (Printf.sprintf "MATCH (p:%s) RETURN p" label))
   session
 (* Each record has a node under key "p" *)
-```
+]}
 
 Decode nodes with Record
-```ocaml
+{[
 match res with
 | Ok [r] -> (match Record.at_node r "p" with
             | Ok n ->
@@ -34,10 +32,10 @@ match res with
                  | Some (Value.Text s) -> Printf.printf "name=%s\n" s | _ -> ())
             | Error e -> Format.eprintf "%a\n" Record.pp_decode_error e)
 | _ -> ()
-```
+]}
 
 Decode nodes with Extract
-```ocaml
+{[
 open Extract
 let node_info =
   let+ n = node "p" in
@@ -53,35 +51,34 @@ match Query_builder.execute
                   (match name_opt with Some (Value.Text s) -> s | _ -> "-")
             | Error e -> Format.eprintf "%a\n" Record.pp_decode_error e)
 | _ -> ()
-```
+]}
 
 Access node properties with Lens
-```ocaml
+{[
 open Lens
 let show_name n =
   match n ^. node_prop_text "name" with
   | Some s -> Printf.printf "name=%s\n" s
   | None -> ()
-```
+]}
 
 Update nodes
-```ocaml
+{[
 let _ = Query_builder.execute
   (Query_builder.raw (Printf.sprintf
      "MATCH (p:%s {name:'Alice'}) SET p.age = $age RETURN p.age AS age" label)
    |> Query_builder.with_param ("age", Value.Int 31L))
   session
-```
+]}
 
 Delete nodes
-```ocaml
+{[
 let _ = Query_builder.execute_unit
   (Query_builder.raw (Printf.sprintf "MATCH (n:%s) DETACH DELETE n" label))
   session
-```
+]}
 
 Tips
-- Always alias fields in RETURN (e.g., `RETURN p` or `p.name AS name`) to get stable keys.
-- Use `Record.at_node`/`Extract.node` for typed decoding; Lens helpers (`node_prop_*`, `node_id`, `node_labels`) are convenient for in‑memory access.
-- Prefer `DETACH DELETE` if relationships may exist.
-v}
+- Always alias fields in RETURN (e.g., [RETURN p] or [p.name AS name]) to get stable keys.
+- Use [Record.at_node]/[Extract.node] for typed decoding; Lens helpers ([node_prop_*], [node_id], [node_labels]) are convenient for in‑memory access.
+- Prefer [DETACH DELETE] if relationships may exist.

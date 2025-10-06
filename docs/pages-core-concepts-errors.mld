@@ -1,26 +1,24 @@
-{0 errors}
+{0 Error Handling Patterns}
 
-{v
-# Error Handling Patterns
 
-All public operations return `('a, Error.t) result`. This page explains the error types, where they come from, and practical patterns to handle them. It reflects the current `Error`, `Session`, `Query_builder`, `Cypher`, and `Transaction_dsl` modules.
+All public operations return [('a, Error.t) result]. This page explains the error types, where they come from, and practical patterns to handle them. It reflects the current [Error], [Session], [Query_builder], [Cypher], and [Transaction_dsl] modules.
 
 Error types (Error.t)
-- `Io of string` — I/O failures (connection closed, etc.)
-- `Protocol of string` — protocol violations, unexpected responses
-- `Auth of string` — authentication failures during HELLO
-- `Database { code; message }` — server failure with `Neo.DatabaseError.*`
-- `Transient { code; message }` — server failure with `Neo.TransientError.*` (retryable)
-- `ClientError { code; message }` — client errors (syntax, type errors, assertion helpers)
+- [Io of string] — I/O failures (connection closed, etc.)
+- [Protocol of string] — protocol violations, unexpected responses
+- [Auth of string] — authentication failures during HELLO
+- [Database { code; message }] — server failure with [Neo.DatabaseError.*]
+- [Transient { code; message }] — server failure with [Neo.TransientError.*] (retryable)
+- [ClientError { code; message }] — client errors (syntax, type errors, assertion helpers)
 
 Producing errors
-- Server `FAILURE` frames are mapped via `Error.from_failure_map` (code/message classification).
-- `Record` decode errors are `Record.decode_error` (not `Error.t`); use `Record.pp_decode_error`.
-- Some `Cypher` helpers (e.g., `expect_one`, `assert_*`) produce `ClientError` on mismatches.
+- Server [FAILURE] frames are mapped via [Error.from_failure_map] (code/message classification).
+- [Record] decode errors are [Record.decode_error] (not [Error.t]); use [Record.pp_decode_error].
+- Some [Cypher] helpers (e.g., [expect_one], [assert_*]) produce [ClientError] on mismatches.
 
 Basic handling
 
-```ocaml
+{[
 match Query_builder.execute (Query_builder.raw "INVALID CYPHER") session with
 | Ok _ -> ()
 | Error (Error.Database { code; message })
@@ -30,16 +28,16 @@ match Query_builder.execute (Query_builder.raw "INVALID CYPHER") session with
 | Error (Error.Auth msg) -> Printf.eprintf "auth: %s\n" msg
 | Error (Error.Protocol msg) -> Printf.eprintf "protocol: %s\n" msg
 | Error (Error.Io msg) -> Printf.eprintf "io: %s\n" msg
-```
+]}
 
 Reset behavior
-- After a server `FAILURE` outside a transaction, the session auto‑issues `RESET` to clear failed state.
+- After a server [FAILURE] outside a transaction, the session auto‑issues [RESET] to clear failed state.
 - Inside a transaction, rollback clears the failed state; auto‑reset is suppressed until rollback.
 
 Transactions with catch
-- Use `Transaction_dsl.catch` to handle errors within a composed workflow and continue with fallback logic.
+- Use [Transaction_dsl.catch] to handle errors within a composed workflow and continue with fallback logic.
 
-```ocaml
+{[
 let open Transaction_dsl in
 let tx =
   catch
@@ -52,34 +50,33 @@ let tx =
 in match run tx session with
 | Ok () -> ()
 | Error e -> Printf.eprintf "tx failed: %s\n" (Error.to_string e)
-```
+]}
 
 Retrying transient errors
-- `Error.Transient` suggests a retry may succeed. Implement retries at the application level (e.g., exponential backoff) since the driver does not currently include retry utilities at the session API level.
+- [Error.Transient] suggests a retry may succeed. Implement retries at the application level (e.g., exponential backoff) since the driver does not currently include retry utilities at the session API level.
 
-```ocaml
+{[
 let rec with_retries n f =
   match f () with
   | Ok x -> Ok x
   | Error (Error.Transient _ as e) when n > 0 -> with_retries (n-1) f
   | Error e -> Error e
-```
+]}
 
 Decode errors vs driver errors
-- `Record`/`Extract` decoding returns `('a, Record.decode_error) result`:
+- [Record]/[Extract] decoding returns [('a, Record.decode_error) result]:
 
-```ocaml
+{[
 match Query_builder.execute (Query_builder.raw "RETURN 1 AS x") session with
 | Ok [r] -> (match Record.at_text r "x" with
             | Ok _ -> ()
             | Error e -> Format.eprintf "%a\n" Record.pp_decode_error e)
 | _ -> ()
-```
+]}
 
 Best practices
-- Always log `code` and `message` for server errors.
+- Always log [code] and [message] for server errors.
 - For transient errors, implement targeted retries around idempotent operations.
-- Keep mutations inside transactions and roll back on failure (or use `Transaction_dsl.run`).
-- Prefer `Session.run_records`/Query Builder for field‑named decoding; it reduces type/shape mistakes.
-- Use `Error.to_string` for quick reporting; pattern‑match on constructors for precise handling.
-v}
+- Keep mutations inside transactions and roll back on failure (or use [Transaction_dsl.run]).
+- Prefer [Session.run_records]/Query Builder for field‑named decoding; it reduces type/shape mistakes.
+- Use [Error.to_string] for quick reporting; pattern‑match on constructors for precise handling.
