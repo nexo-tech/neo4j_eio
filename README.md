@@ -443,7 +443,7 @@ Module structure:
 
 ## License
 
-See LICENSE file.
+MIT License
 
 ## Contributing
 
